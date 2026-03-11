@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart-E — All-in-One Platform</title>
+<style>
+:root{--primary:#6366f1;--primary-dark:#4f46e5;--secondary:#06b6d4;--success:#10b981;--warning:#f59e0b;--danger:#ef4444;--bg:#f1f5f9;--card:#fff;--sidebar:#1e1b4b;--sidebar-hover:#312e81;--text:#1e293b;--muted:#64748b;--border:#e2e8f0}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden}
+/* Sidebar */
+#sidebar{width:240px;background:var(--sidebar);color:#fff;display:flex;flex-direction:column;transition:width .3s;flex-shrink:0;overflow:hidden}
+#sidebar.collapsed{width:64px}
+.logo{padding:20px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.1)}
+.logo-icon{font-size:28px}
+.logo-text{font-size:18px;font-weight:700;white-space:nowrap;overflow:hidden}
+.logo-text span{color:#a5b4fc}
+.nav-section{padding:8px 0;flex:1;overflow-y:auto}
+.nav-label{padding:8px 16px 4px;font-size:10px;text-transform:uppercase;color:rgba(255,255,255,.4);letter-spacing:1px;white-space:nowrap;overflow:hidden}
+.nav-item{display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;transition:.2s;border-radius:6px;margin:2px 8px;white-space:nowrap;overflow:hidden}
+.nav-item:hover,.nav-item.active{background:var(--sidebar-hover)}
+.nav-item.active{background:var(--primary)}
+.nav-icon{font-size:18px;flex-shrink:0;width:20px;text-align:center}
+.nav-text{font-size:14px;overflow:hidden}
+/* Main */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#topbar{height:60px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;gap:16px}
+.topbar-left{display:flex;align-items:center;gap:12px}
+#toggle-sidebar{background:none;border:none;cursor:pointer;font-size:20px;padding:4px;border-radius:6px;color:var(--muted)}
+#toggle-sidebar:hover{background:var(--bg)}
+#page-title{font-size:18px;font-weight:600}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.badge{background:var(--danger);color:#fff;border-radius:999px;font-size:11px;padding:1px 6px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;cursor:pointer}
+#content{flex:1;overflow-y:auto;padding:24px}
+/* Cards */
+.card{background:var(--card);border-radius:12px;border:1px solid var(--border);padding:20px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.card-title{font-size:16px;font-weight:600}
+.grid{display:grid;gap:16px}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+/* Stat cards */
+.stat-card{background:var(--card);border-radius:12px;padding:20px;border:1px solid var(--border);display:flex;align-items:center;gap:16px}
+.stat-icon{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.stat-value{font-size:24px;font-weight:700;line-height:1}
+.stat-label{font-size:13px;color:var(--muted);margin-top:4px}
+.stat-change{font-size:12px;font-weight:600;margin-top:6px}
+.stat-change.up{color:var(--success)}
+.stat-change.down{color:var(--danger)}
+/* Tables */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{padding:10px 12px;text-align:left;font-size:12px;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:hover td{background:var(--bg)}
+.th-r,td.td-r{text-align:right}
+/* Badges */
+.pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill-success{background:#d1fae5;color:#065f46}
+.pill-warning{background:#fef3c7;color:#92400e}
+.pill-danger{background:#fee2e2;color:#991b1b}
+.pill-info{background:#e0f2fe;color:#075985}
+.pill-default{background:#f1f5f9;color:#475569}
+.pill-purple{background:#ede9fe;color:#5b21b6}
+.pill-tiktok{background:#000;color:#fff}
+.pill-line{background:#06c755;color:#fff}
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;border:none;transition:.2s;white-space:nowrap}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-secondary{background:var(--bg);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:#e2e8f0}
+.btn-success{background:var(--success);color:#fff}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-icon{padding:6px;border-radius:6px}
+/* Forms */
+.form-group{margin-bottom:16px}
+label{display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:var(--text)}
+input,select,textarea{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none;transition:.2s;font-family:inherit;background:#fff}
+input:focus,select:focus,textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(99,102,241,.1)}
+textarea{resize:vertical;min-height:80px}
+.input-group{display:flex;gap:8px}
+.input-group input{flex:1}
+/* Modal */
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center}
+#modal-overlay.open{display:flex}
+.modal{background:#fff;border-radius:16px;padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.modal-title{font-size:18px;font-weight:700}
+.modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);padding:4px}
+/* Toast */
+#toast{position:fixed;bottom:24px;right:24px;z-index:2000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast-item{background:#1e293b;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);animation:slideIn .3s ease;max-width:320px}
+.toast-item.success{border-left:4px solid var(--success)}
+.toast-item.error{border-left:4px solid var(--danger)}
+.toast-item.info{border-left:4px solid var(--secondary)}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+/* Charts */
+.chart-container{position:relative;width:100%;height:260px}
+canvas{max-height:260px}
+/* Loading */
+.loading{display:flex;align-items:center;justify-content:center;padding:40px;color:var(--muted);font-size:14px;gap:8px}
+.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Search */
+.search-bar{position:relative}
+.search-bar input{padding-left:36px}
+.search-bar::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;z-index:1}
+/* Status colors */
+.status-select{padding:4px 8px;border-radius:6px;font-size:12px;font-weight:600;border:none;cursor:pointer}
+/* QR container */
+.qr-box{background:#f8fafc;border-radius:12px;padding:20px;text-align:center;border:2px dashed var(--border)}
+.qr-box img{max-width:180px;border-radius:8px}
+.qr-amount{font-size:28px;font-weight:700;color:var(--primary);margin:8px 0}
+/* LINE/TikTok colors */
+.line-green{color:#06c755}
+.tiktok-black{color:#000}
+/* Page sections */
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap}
+/* Responsive */
+@media(max-width:768px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-3{grid-template-columns:1fr}.grid-2{grid-template-columns:1fr}#sidebar{position:fixed;z-index:500;height:100%}.modal{margin:16px;max-width:100%}}
+/* Empty state */
+.empty{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty-icon{font-size:48px;margin-bottom:12px}
+/* Progress bar */
+.progress{height:8px;background:var(--border);border-radius:999px;overflow:hidden}
+.progress-bar{height:100%;border-radius:999px;transition:width .5s}
+/* Tabs */
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--border);margin-bottom:20px}
+.tab{padding:8px 16px;font-size:14px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);transition:.2s}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+/* Channel tag */
+.ch-web{background:#dbeafe;color:#1d4ed8}
+.ch-line{background:#dcfce7;color:#166534}
+.ch-tiktok{background:#f3f4f6;color:#111827}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav id="sidebar">
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div class="logo-text">Smart<span>-E</span></div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">หลัก</div>
+    <div class="nav-item active" onclick="navigate('dashboard')">
+      <span class="nav-icon">📊</span><span class="nav-text">Dashboard</span>
+    </div>
+    <div class="nav-label">ร้านค้า</div>
+    <div class="nav-item" onclick="navigate('products')">
+      <span class="nav-icon">📦</span><span class="nav-text">สินค้า</span>
+    </div>
+    <div class="nav-item" onclick="navigate('orders')">
+      <span class="nav-icon">🛒</span><span class="nav-text">คำสั่งซื้อ</span>
+    </div>
+    <div class="nav-item" onclick="navigate('customers')">
+      <span class="nav-icon">👥</span><span class="nav-text">ลูกค้า / CRM</span>
+    </div>
+    <div class="nav-label">การชำระเงิน</div>
+    <div class="nav-item" onclick="navigate('payments')">
+      <span class="nav-icon">💳</span><span class="nav-text">ชำระเงิน</span>
+    </div>
+    <div class="nav-label">Social</div>
+    <div class="nav-item" onclick="navigate('line')">
+      <span class="nav-icon">💬</span><span class="nav-text">LINE Integration</span>
+    </div>
+    <div class="nav-item" onclick="navigate('tiktok')">
+      <span class="nav-icon">🎵</span><span class="nav-text">TikTok</span>
+    </div>
+    <div class="nav-label">รายงาน</div>
+    <div class="nav-item" onclick="navigate('analytics')">
+      <span class="nav-icon">📈</span><span class="nav-text">Analytics</span>
+    </div>
+    <div class="nav-item" onclick="navigate('settings')">
+      <span class="nav-icon">⚙️</span><span class="nav-text">ตั้งค่า</span>
+    </div>
+  </div>
+</nav>
+
+<!-- Main -->
+<div id="main">
+  <div id="topbar">
+    <div class="topbar-left">
+      <button id="toggle-sidebar" onclick="toggleSidebar()">☰</button>
+      <span id="page-title">Dashboard</span>
+    </div>
+    <div class="topbar-right">
+      <span style="font-size:13px;color:var(--muted)">Smart-E Platform</span>
+      <div class="avatar" title="Admin">A</div>
+    </div>
+  </div>
+  <div id="content"><div class="loading"><div class="spinner"></div> กำลังโหลด...</div></div>
+</div>
+
+<!-- Modal -->
+<div id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal-box">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Modal</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<script>
+const API = '';
+let charts = {};
+
+// ─── Utils ───────────────────────────────────
+async function api(path, opts={}) {
+  try {
+    const r = await fetch(API + path, {
+      headers: {'Content-Type':'application/json'},
+      ...opts
+    });
+    return await r.json();
+  } catch(e) { return null; }
+}
+
+function fmt(n) {
+  return new Intl.NumberFormat('th-TH').format(Math.round(n || 0));
+}
+function fmtB(n) {
+  if(n >= 1000000) return '฿' + (n/1000000).toFixed(1) + 'M';
+  if(n >= 1000) return '฿' + (n/1000).toFixed(1) + 'K';
+  return '฿' + fmt(n);
+}
+function fmtDate(s) {
+  if(!s) return '-';
+  return new Date(s).toLocaleDateString('th-TH', {day:'2-digit',month:'short',year:'2-digit'}) + ' ' +
+         new Date(s).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+}
+
+function statusPill(s) {
+  const map = {pending:'warning',confirmed:'info',shipped:'purple',delivered:'success',cancelled:'danger'};
+  const th = {pending:'รอดำเนินการ',confirmed:'ยืนยันแล้ว',shipped:'จัดส่งแล้ว',delivered:'สำเร็จ',cancelled:'ยกเลิก'};
+  return `<span class="pill pill-${map[s]||'default'}">${th[s]||s}</span>`;
+}
+function channelPill(ch) {
+  const icon = {web:'🌐',line:'💬',tiktok:'🎵'};
+  return `<span class="pill ch-${ch}">${icon[ch]||''}${ch}</span>`;
+}
+function tagPill(t) {
+  const map = {VIP:'pill-success',ประจำ:'pill-info',ใหม่:'pill-warning',ทั่วไป:'pill-default',LINE:'pill-line'};
+  return `<span class="pill ${map[t]||'pill-default'}">${t}</span>`;
+}
+
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = `toast-item ${type}`;
+  const icons = {success:'✅',error:'❌',info:'ℹ️'};
+  el.innerHTML = `<span>${icons[type]}</span><span>${msg}</span>`;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function openModal(title, html) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal(e) {
+  if(!e || e.target===document.getElementById('modal-overlay'))
+    document.getElementById('modal-overlay').classList.remove('open');
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+}
+
+function navigate(page) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  event?.currentTarget?.classList.add('active');
+  const titles = {dashboard:'Dashboard',products:'สินค้า',orders:'คำสั่งซื้อ',customers:'ลูกค้า / CRM',
+    payments:'ชำระเงิน',line:'LINE Integration',tiktok:'TikTok',analytics:'Analytics',settings:'ตั้งค่า'};
+  document.getElementById('page-title').textContent = titles[page] || page;
+  Object.values(charts).forEach(c => { try{c.destroy()}catch(e){} });
+  charts = {};
+  const pages = {dashboard:renderDashboard,products:renderProducts,orders:renderOrders,
+    customers:renderCustomers,payments:renderPayments,line:renderLine,tiktok:renderTikTok,
+    analytics:renderAnalytics,settings:renderSettings};
+  (pages[page] || (() => {}))();
+}
+
+// ─── DASHBOARD ───────────────────────────────
+async function renderDashboard() {
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> กำลังโหลด...</div>';
+  const d = await api('/api/dashboard/stats');
+  if(!d) return;
+  const channelData = {};
+  (d.channels||[]).forEach(c => channelData[c.channel]=c);
+
+  document.getElementById('content').innerHTML = `
+  <div class="grid grid-4" style="margin-bottom:16px">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#ede9fe">💰</div>
+      <div><div class="stat-value">${fmtB(d.today_revenue)}</div><div class="stat-label">ยอดขายวันนี้</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#fef3c7">🛒</div>
+      <div><div class="stat-value">${fmt(d.pending_orders)}</div><div class="stat-label">รอดำเนินการ</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#d1fae5">👥</div>
+      <div><div class="stat-value">${fmt(d.total_customers)}</div><div class="stat-label">ลูกค้าทั้งหมด</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#dbeafe">📦</div>
+      <div><div class="stat-value">${fmtB(d.monthly_revenue)}</div><div class="stat-label">รายได้ 30 วัน</div></div>
+    </div>
+  </div>
+
+  <div class="grid grid-3" style="margin-bottom:16px">
+    <div class="card" style="grid-column:span 2">
+      <div class="card-header"><span class="card-title">📈 ยอดขาย 30 วัน</span></div>
+      <div class="chart-container"><canvas id="revenueChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">📡 ช่องทางขาย</span></div>
+      <div class="chart-container"><canvas id="channelChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="card-header"><span class="card-title">🏆 สินค้าขายดี</span></div>
+      <table><thead><tr><th>สินค้า</th><th class="th-r">ขายได้</th><th class="th-r">รายได้</th></tr></thead>
+      <tbody>${(d.top_products||[]).map(p=>`<tr><td>${p.name}</td><td class="td-r">${fmt(p.sold)}</td><td class="td-r">${fmtB(p.revenue)}</td></tr>`).join('')||'<tr><td colspan=3 style="text-align:center;color:var(--muted)">ยังไม่มีข้อมูล</td></tr>'}</tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">📋 ออเดอร์ล่าสุด</span>
+        <button class="btn btn-secondary btn-sm" onclick="navigate('orders')">ดูทั้งหมด</button></div>
+      <table><thead><tr><th>#</th><th>ลูกค้า</th><th>ช่องทาง</th><th class="th-r">ยอด</th><th>สถานะ</th></tr></thead>
+      <tbody>${(d.recent_orders||[]).map(o=>`<tr><td>#${o.id}</td><td>${o.customer_name}</td><td>${channelPill(o.channel)}</td><td class="td-r">${fmtB(o.total)}</td><td>${statusPill(o.status)}</td></tr>`).join('')||'<tr><td colspan=5 style="text-align:center;color:var(--muted)">ยังไม่มีข้อมูล</td></tr>'}</tbody></table>
+    </div>
+  </div>`;
+
+  // Revenue chart
+  const labels = (d.daily_revenue||[]).map(r=>r.day.slice(5));
+  const revData = (d.daily_revenue||[]).map(r=>r.revenue);
+  if(document.getElementById('revenueChart')) {
+    charts.revenue = new Chart(document.getElementById('revenueChart'), {
+      type:'line', data:{labels,datasets:[{label:'รายได้',data:revData,fill:true,borderColor:'#6366f1',
+        backgroundColor:'rgba(99,102,241,.1)',tension:.4,pointRadius:3}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{y:{ticks:{callback:v=>'฿'+fmt(v)}}}}
+    });
+  }
+  // Channel chart
+  const chLabels = (d.channels||[]).map(c=>c.channel);
+  const chData = (d.channels||[]).map(c=>c.rev);
+  if(document.getElementById('channelChart')) {
+    charts.channel = new Chart(document.getElementById('channelChart'), {
+      type:'doughnut', data:{labels:chLabels,datasets:[{data:chData,
+        backgroundColor:['#6366f1','#06c755','#000000','#06b6d4']}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}
+    });
+  }
+}
+
+// ─── PRODUCTS ────────────────────────────────
+async function renderProducts() {
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const d = await api('/api/products');
+  if(!d) return;
+  document.getElementById('content').innerHTML = `
+  <div class="section-header">
+    <div class="search-bar"><input id="prod-search" placeholder="ค้นหาสินค้า..." oninput="filterProducts()" style="width:260px"></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="cat-filter" onchange="filterProducts()" style="width:160px">
+        <option value="">ทุกหมวด</option>
+        ${(d.categories||[]).map(c=>`<option>${c}</option>`).join('')}
+      </select>
+      <button class="btn btn-primary" onclick="openProductModal()">+ เพิ่มสินค้า</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table><thead><tr><th>#</th><th>ชื่อสินค้า</th><th>หมวดหมู่</th><th class="th-r">ราคา</th><th class="th-r">สต็อก</th><th>จัดการ</th></tr></thead>
+      <tbody id="prod-table">${renderProductRows(d.products)}</tbody></table>
+    </div>
+  </div>`;
+  window._allProducts = d.products;
+}
+
+function renderProductRows(products) {
+  if(!products.length) return '<tr><td colspan=6><div class="empty"><div class="empty-icon">📦</div>ไม่มีสินค้า</div></td></tr>';
+  return products.map(p=>`<tr>
+    <td style="color:var(--muted)">#${p.id}</td>
+    <td><div style="font-weight:500">${p.name}</div><div style="font-size:12px;color:var(--muted)">${p.description||''}</div></td>
+    <td><span class="pill pill-default">${p.category}</span></td>
+    <td class="td-r" style="font-weight:600">฿${fmt(p.price)}</td>
+    <td class="td-r"><span style="color:${p.stock<10?'var(--danger)':p.stock<30?'var(--warning)':'var(--success)'};font-weight:600">${p.stock}</span></td>
+    <td><div style="display:flex;gap:6px">
+      <button class="btn btn-secondary btn-sm" onclick="openProductModal(${p.id})">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteProduct(${p.id})">🗑️</button>
+    </div></td>
+  </tr>`).join('');
+}
+
+async function filterProducts() {
+  const q = document.getElementById('prod-search')?.value.toLowerCase()||'';
+  const cat = document.getElementById('cat-filter')?.value||'';
+  const filtered = (window._allProducts||[]).filter(p =>
+    (!q || p.name.toLowerCase().includes(q) || (p.description||'').toLowerCase().includes(q)) &&
+    (!cat || p.category === cat)
+  );
+  const tbody = document.getElementById('prod-table');
+  if(tbody) tbody.innerHTML = renderProductRows(filtered);
+}
+
+async function openProductModal(id=null) {
+  let p = {};
+  if(id) {
+    p = await api(`/api/products/${id}`) || {};
+  }
+  openModal(id ? 'แก้ไขสินค้า' : 'เพิ่มสินค้าใหม่', `
+  <form onsubmit="saveProduct(event,${id})">
+    <div class="form-group"><label>ชื่อสินค้า *</label><input name="name" required value="${p.name||''}"></div>
+    <div class="form-group"><label>คำอธิบาย</label><textarea name="description">${p.description||''}</textarea></div>
+    <div class="grid grid-2">
+      <div class="form-group"><label>ราคา (฿) *</label><input name="price" type="number" step="0.01" required value="${p.price||''}"></div>
+      <div class="form-group"><label>สต็อก *</label><input name="stock" type="number" required value="${p.stock||0}"></div>
+    </div>
+    <div class="form-group"><label>หมวดหมู่</label>
+      <select name="category">
+        ${['สกินแคร์','มาสก์','ผลิตภัณฑ์อาบน้ำ','เส้นผม','ทำความสะอาด','ทั่วไป'].map(c=>`<option ${p.category===c?'selected':''}>${c}</option>`).join('')}
+      </select></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button type="button" class="btn btn-secondary" onclick="closeModal()">ยกเลิก</button>
+      <button type="submit" class="btn btn-primary">${id?'บันทึก':'เพิ่มสินค้า'}</button>
+    </div>
+  </form>`);
+}
+
+async function saveProduct(e, id) {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const body = Object.fromEntries(f);
+  body.price = parseFloat(body.price);
+  body.stock = parseInt(body.stock);
+  const method = id ? 'PUT' : 'POST';
+  const url = id ? `/api/products/${id}` : '/api/products';
+  await api(url, {method, body: JSON.stringify(body)});
+  closeModal();
+  toast(id?'อัปเดตสินค้าแล้ว':'เพิ่มสินค้าแล้ว','success');
+  renderProducts();
+}
+
+async function deleteProduct(id) {
+  if(!confirm('ต้องการลบสินค้านี้?')) return;
+  await api(`/api/products/${id}`, {method:'DELETE'});
+  toast('ลบสินค้าแล้ว','success');
+  renderProducts();
+}
+
+// ─── ORDERS ──────────────────────────────────
+async function renderOrders(statusFilter='', channelFilter='') {
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const params = new URLSearchParams();
+  if(statusFilter) params.set('status',statusFilter);
+  if(channelFilter) params.set('channel',channelFilter);
+  const d = await api('/api/orders?'+params);
+  if(!d) return;
+  const statuses = ['','pending','confirmed','shipped','delivered','cancelled'];
+  const channels = ['','web','line','tiktok'];
+  document.getElementById('content').innerHTML = `
+  <div class="section-header">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <select onchange="renderOrders(this.value, '${channelFilter}')" style="width:160px">
+        ${statuses.map(s=>`<option value="${s}" ${s===statusFilter?'selected':''}>${s||'ทุกสถานะ'}</option>`).join('')}
+      </select>
+      <select onchange="renderOrders('${statusFilter}', this.value)" style="width:140px">
+        ${channels.map(c=>`<option value="${c}" ${c===channelFilter?'selected':''}>${c||'ทุกช่องทาง'}</option>`).join('')}
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:14px;color:var(--muted)">${d.total} ออเดอร์</span>
+      <button class="btn btn-primary" onclick="openOrderModal()">+ ออเดอร์ใหม่</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table><thead><tr><th>#</th><th>ลูกค้า</th><th>สินค้า</th><th>ช่องทาง</th><th class="th-r">ยอด</th><th>สถานะ</th><th>วันที่</th><th>จัดการ</th></tr></thead>
+      <tbody>${(d.orders||[]).map(o=>`<tr>
+        <td style="color:var(--muted)">#${o.id}</td>
+        <td style="font-weight:500">${o.customer_name}</td>
+        <td style="font-size:12px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis">${o.items_summary||'-'}</td>
+        <td>${channelPill(o.channel)}</td>
+        <td class="td-r" style="font-weight:600">฿${fmt(o.total)}</td>
+        <td>${statusPill(o.status)}</td>
+        <td style="font-size:12px;color:var(--muted)">${fmtDate(o.created_at)}</td>
+        <td><select class="status-select" onchange="updateOrderStatus(${o.id},this.value)" style="border:1px solid var(--border);background:#fff;border-radius:6px;padding:4px 8px;font-size:12px">
+          ${['pending','confirmed','shipped','delivered','cancelled'].map(s=>`<option ${s===o.status?'selected':''}>${s}</option>`).join('')}
+        </select></td>
+      </tr>`).join('')||'<tr><td colspan=8><div class="empty"><div class="empty-icon">🛒</div>ไม่มีออเดอร์</div></td></tr>'}</tbody></table>
+    </div>
+  </div>`;
+}
+
+async function updateOrderStatus(id, status) {
+  await api(`/api/orders/${id}/status`, {method:'PUT', body:JSON.stringify({status})});
+  toast(`อัปเดตสถานะเป็น "${status}"`, 'success');
+}
+
+async function openOrderModal() {
+  const prods = await api('/api/products') || {products:[]};
+  const custs = await api('/api/customers') || {customers:[]};
+  openModal('สร้างออเดอร์ใหม่', `
+  <form onsubmit="createOrder(event)">
+    <div class="form-group"><label>ลูกค้า</label>
+      <select name="customer_id" onchange="fillCustomerName(this)">
+        <option value="">-- ลูกค้าทั่วไป --</option>
+        ${custs.customers.map(c=>`<option value="${c.id}" data-name="${c.name}">${c.name} (${c.phone||c.email||''})</option>`).join('')}
+      </select></div>
+    <div class="form-group"><label>ชื่อลูกค้า</label><input name="customer_name" id="order-cname" placeholder="หรือระบุชื่อใหม่"></div>
+    <div class="form-group"><label>ช่องทาง</label>
+      <select name="channel"><option>web</option><option>line</option><option>tiktok</option></select></div>
+    <div class="form-group"><label>สินค้า</label>
+      <select id="add-product-sel" style="margin-bottom:8px">
+        ${prods.products.map(p=>`<option value="${p.id}" data-price="${p.price}" data-name="${p.name}">฿${fmt(p.price)} — ${p.name}</option>`).join('')}
+      </select>
+      <div style="display:flex;gap:8px">
+        <input id="add-qty" type="number" value="1" min="1" style="width:80px">
+        <button type="button" class="btn btn-secondary" onclick="addOrderItem()">+ เพิ่ม</button>
+      </div></div>
+    <div id="order-items-list" style="margin-bottom:12px;display:flex;flex-direction:column;gap:6px"></div>
+    <input type="hidden" id="order-items-data" name="items" value="[]">
+    <div class="form-group"><label>หมายเหตุ</label><input name="note" placeholder="หมายเหตุ..."></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button type="button" class="btn btn-secondary" onclick="closeModal()">ยกเลิก</button>
+      <button type="submit" class="btn btn-primary">สร้างออเดอร์</button>
+    </div>
+  </form>`);
+  window._orderItems = [];
+}
+
+function fillCustomerName(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  document.getElementById('order-cname').value = opt.dataset.name || '';
+}
+
+function addOrderItem() {
+  const sel = document.getElementById('add-product-sel');
+  const opt = sel.options[sel.selectedIndex];
+  const qty = parseInt(document.getElementById('add-qty').value) || 1;
+  const item = {product_id: parseInt(sel.value), product_name: opt.dataset.name, price: parseFloat(opt.dataset.price), qty};
+  const existing = window._orderItems.findIndex(i => i.product_id === item.product_id);
+  if(existing >= 0) window._orderItems[existing].qty += qty;
+  else window._orderItems.push(item);
+  document.getElementById('order-items-data').value = JSON.stringify(window._orderItems);
+  const list = document.getElementById('order-items-list');
+  list.innerHTML = window._orderItems.map((i,idx)=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg);padding:8px 12px;border-radius:8px;font-size:13px">
+      <span>${i.product_name} x${i.qty}</span>
+      <span style="font-weight:600">฿${fmt(i.price*i.qty)}</span>
+    </div>`).join('');
+}
+
+async function createOrder(e) {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const items = JSON.parse(f.get('items') || '[]');
+  if(!items.length) return toast('กรุณาเพิ่มสินค้าอย่างน้อย 1 รายการ', 'error');
+  const body = {
+    customer_id: f.get('customer_id') || null,
+    customer_name: f.get('customer_name') || 'ลูกค้าทั่วไป',
+    channel: f.get('channel'),
+    note: f.get('note'),
+    items
+  };
+  await api('/api/orders', {method:'POST', body:JSON.stringify(body)});
+  closeModal();
+  toast('สร้างออเดอร์สำเร็จ', 'success');
+  renderOrders();
+}
+
+// ─── CUSTOMERS ───────────────────────────────
+async function renderCustomers() {
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const d = await api('/api/customers');
+  if(!d) return;
+  document.getElementById('content').innerHTML = `
+  <div class="section-header">
+    <div class="search-bar"><input placeholder="ค้นหาลูกค้า..." oninput="searchCustomers(this.value)" style="width:260px"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary" onclick="renderCustomers()">🔄 รีเฟรช</button>
+      <button class="btn btn-primary" onclick="openCustomerModal()">+ เพิ่มลูกค้า</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table><thead><tr><th>ชื่อ</th><th>ติดต่อ</th><th>LINE</th><th>แท็ก</th><th class="th-r">ออเดอร์</th><th class="th-r">ยอดซื้อรวม</th><th>วันที่สมัคร</th><th>จัดการ</th></tr></thead>
+      <tbody id="cust-table">${renderCustomerRows(d.customers)}</tbody></table>
+    </div>
+  </div>`;
+  window._allCustomers = d.customers;
+}
+
+function renderCustomerRows(customers) {
+  if(!customers.length) return '<tr><td colspan=8><div class="empty"><div class="empty-icon">👥</div>ไม่มีข้อมูลลูกค้า</div></td></tr>';
+  return customers.map(c=>`<tr>
+    <td><div style="font-weight:500">${c.name}</div><div style="font-size:12px;color:var(--muted)">${c.email||''}</div></td>
+    <td style="font-size:13px">${c.phone||'-'}</td>
+    <td>${c.line_display_name ? `<span class="pill pill-line">💬 ${c.line_display_name}</span>` : '<span style="color:var(--muted);font-size:12px">-</span>'}</td>
+    <td>${tagPill(c.tag||'ทั่วไป')}</td>
+    <td class="td-r">${fmt(c.total_orders)}</td>
+    <td class="td-r" style="font-weight:600">${fmtB(c.total_spent)}</td>
+    <td style="font-size:12px;color:var(--muted)">${fmtDate(c.created_at)}</td>
+    <td><div style="display:flex;gap:6px">
+      <button class="btn btn-secondary btn-sm" onclick="viewCustomer(${c.id})">👁️</button>
+      <button class="btn btn-secondary btn-sm" onclick="openCustomerModal(${c.id})">✏️</button>
+    </div></td>
+  </tr>`).join('');
+}
+
+function searchCustomers(q) {
+  const filtered = (window._allCustomers||[]).filter(c =>
+    c.name.includes(q) || (c.email||'').includes(q) || (c.phone||'').includes(q) ||
+    (c.line_display_name||'').includes(q)
+  );
+  const t = document.getElementById('cust-table');
+  if(t) t.innerHTML = renderCustomerRows(filtered);
+}
+
+async function viewCustomer(id) {
+  const c = await api(`/api/customers/${id}`);
+  if(!c) return;
+  openModal(`ลูกค้า: ${c.name}`, `
+  <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+    <div class="stat-card" style="flex:1;min-width:120px">
+      <div><div class="stat-value">${fmt(c.total_orders)}</div><div class="stat-label">ออเดอร์ทั้งหมด</div></div>
+    </div>
+    <div class="stat-card" style="flex:1;min-width:120px">
+      <div><div class="stat-value">${fmtB(c.total_spent)}</div><div class="stat-label">ยอดซื้อรวม</div></div>
+    </div>
+  </div>
+  <div style="margin-bottom:16px"><b>ข้อมูลติดต่อ</b>
+    <div style="font-size:13px;margin-top:8px;display:flex;flex-direction:column;gap:4px">
+      <div>📧 ${c.email||'-'}</div>
+      <div>📱 ${c.phone||'-'}</div>
+      ${c.line_display_name?`<div>💬 LINE: ${c.line_display_name}</div>`:''}
+    </div>
+  </div>
+  <b>ออเดอร์ล่าสุด</b>
+  <table style="margin-top:8px"><thead><tr><th>#</th><th>ยอด</th><th>สถานะ</th><th>วันที่</th></tr></thead>
+  <tbody>${(c.orders||[]).map(o=>`<tr><td>#${o.id}</td><td>฿${fmt(o.total)}</td><td>${statusPill(o.status)}</td><td style="font-size:12px">${fmtDate(o.created_at)}</td></tr>`).join('')||'<tr><td colspan=4 style="text-align:center;color:var(--muted)">ไม่มีออเดอร์</td></tr>'}</tbody></table>
+  `);
+}
+
+async function openCustomerModal(id=null) {
+  let c = {};
+  if(id) c = await api(`/api/customers/${id}`) || {};
+  openModal(id?'แก้ไขลูกค้า':'เพิ่มลูกค้าใหม่', `
+  <form onsubmit="saveCustomer(event,${id})">
+    <div class="form-group"><label>ชื่อ *</label><input name="name" required value="${c.name||''}"></div>
+    <div class="grid grid-2">
+      <div class="form-group"><label>อีเมล</label><input name="email" type="email" value="${c.email||''}"></div>
+      <div class="form-group"><label>โทรศัพท์</label><input name="phone" value="${c.phone||''}"></div>
+    </div>
+    <div class="form-group"><label>แท็ก</label>
+      <select name="tag">${['ทั่วไป','ใหม่','ประจำ','VIP','LINE'].map(t=>`<option ${c.tag===t?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button type="button" class="btn btn-secondary" onclick="closeModal()">ยกเลิก</button>
+      <button type="submit" class="btn btn-primary">${id?'บันทึก':'เพิ่มลูกค้า'}</button>
+    </div>
+  </form>`);
+}
+
+async function saveCustomer(e, id) {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(e.target));
+  const method = id ? 'PUT' : 'POST';
+  const url = id ? `/api/customers/${id}` : '/api/customers';
+  await api(url, {method, body:JSON.stringify(body)});
+  closeModal();
+  toast(id?'อัปเดตลูกค้าแล้ว':'เพิ่มลูกค้าแล้ว','success');
+  renderCustomers();
+}
+
+// ─── PAYMENTS ────────────────────────────────
+async function renderPayments() {
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const d = await api('/api/payments');
+  if(!d) return;
+  const settings = await api('/api/settings') || {};
+
+  document.getElementById('content').innerHTML = `
+  <div class="grid grid-2" style="margin-bottom:16px">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#d1fae5">✅</div>
+      <div><div class="stat-value">${fmtB(d.total_paid)}</div><div class="stat-label">ยอดที่ชำระแล้ว</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#fef3c7">⏳</div>
+      <div><div class="stat-value">${fmt(d.pending_count)}</div><div class="stat-label">รอชำระ</div></div>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-header"><span class="card-title">🧾 สร้าง QR PromptPay</span></div>
+      <form onsubmit="createQR(event)">
+        <div class="form-group"><label>เบอร์ PromptPay</label>
+          <input id="qr-phone" name="phone" placeholder="08XXXXXXXX" value="${settings.promptpay_phone||''}" required></div>
+        <div class="form-group"><label>จำนวนเงิน (฿)</label>
+          <input id="qr-amount" name="amount" type="number" step="0.01" placeholder="0 = ไม่ระบุจำนวน" value="0"></div>
+        <button type="submit" class="btn btn-primary" style="width:100%">🔳 สร้าง QR Code</button>
+      </form>
+      <div id="qr-result" style="margin-top:16px"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">💡 ข้อมูล PromptPay</span></div>
+      <div style="font-size:13px;line-height:2;color:var(--muted)">
+        <div>✅ รองรับทุกธนาคารในไทย</div>
+        <div>✅ สแกนผ่าน Mobile Banking</div>
+        <div>✅ EMV QR Code มาตรฐานสากล</div>
+        <div>✅ บันทึกประวัติการชำระโดยอัตโนมัติ</div>
+        <div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:8px">
+          <b>ตั้งค่าเบอร์ PromptPay:</b><br>ไปที่ <b>ตั้งค่า → PromptPay</b> เพื่อบันทึกเบอร์โทร
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">📋 ประวัติการชำระ</span></div>
+    <div class="table-wrap">
+      <table><thead><tr><th>#</th><th>ออเดอร์</th><th>ลูกค้า</th><th>วิธี</th><th class="th-r">ยอด</th><th>สถานะ</th><th>วันที่</th><th>จัดการ</th></tr></thead>
+      <tbody>${(d.payments||[]).map(p=>`<tr>
+        <td style="color:var(--muted)">#${p.id}</td>
+        <td>${p.order_id?`#${p.order_id}`:'-'}</td>
+        <td>${p.customer_name||'-'}</td>
+        <td><span class="pill pill-info">${p.method}</span></td>
+        <td class="td-r" style="font-weight:600">฿${fmt(p.amount)}</td>
+        <td>${p.status==='paid'?'<span class="pill pill-success">ชำระแล้ว</span>':'<span class="pill pill-warning">รอชำระ</span>'}</td>
+        <td style="font-size:12px;color:var(--muted)">${fmtDate(p.created_at)}</td>
+        <td>${p.status==='pending'?`<button class="btn btn-success btn-sm" onclick="confirmPayment(${p.id})">✅ ยืนยัน</button>`:''}</td>
+      </tr>`).join('')||'<tr><td colspan=8><div class="empty"><div class="empty-icon">💳</div>ยังไม่มีประวัติ</div></td></tr>'}</tbody></table>
+    </div>
+  </div>`;
+}
+
+async function createQR(e) {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const r = await api('/api/payments/qr', {method:'POST', body:JSON.stringify({
+    phone: f.get('phone'), amount: parseFloat(f.get('amount')||0)
+  })});
+  if(!r) return toast('เกิดข้อผิดพลาด','error');
+  document.getElementById('qr-result').innerHTML = `
+  <div class="qr-box">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:8px">สแกนด้วย Mobile Banking</div>
+    <img src="${r.qr_url}" alt="QR Code" onerror="this.style.display='none';document.getElementById('qr-fallback').style.display='block'">
+    <div id="qr-fallback" style="display:none;background:var(--bg);padding:12px;border-radius:8px;font-size:11px;word-break:break-all;text-align:left">${r.payload}</div>
+    ${r.amount>0?`<div class="qr-amount">฿${fmt(r.amount)}</div>`:''}
+    <div style="font-size:13px;color:var(--muted)">📱 ${r.phone}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">Ref: ${r.ref_code}</div>
+  </div>`;
+  toast('สร้าง QR Code สำเร็จ','success');
+}
+
+async function confirmPayment(id) {
+  await api('/api/payments/confirm', {method:'POST', body:JSON.stringify({id})});
+  toast('ยืนยันการชำระแล้ว','success');
+  renderPayments();
+}
+
+// ─── LINE INTEGRATION ────────────────────────
+async function renderLine() {
+  const settings = await api('/api/settings') || {};
+  const msgs = await api('/api/line/messages') || {messages:[]};
+
+  document.getElementById('content').innerHTML = `
+  <div class="grid grid-3" style="margin-bottom:16px">
+    <div class="card" style="grid-column:span 2">
+      <div class="card-header"><span class="card-title">💬 LINE Official Account</span>
+        <span class="pill ${settings.line_channel_token?'pill-success':'pill-warning'}">${settings.line_channel_token?'✅ เชื่อมต่อแล้ว':'⚠️ ยังไม่ได้ตั้งค่า'}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;font-size:13px">
+          <div style="font-weight:600;margin-bottom:4px">🔗 Webhook URL ของคุณ</div>
+          <div style="font-family:monospace;background:#fff;padding:8px;border-radius:6px;word-break:break-all">
+            http://YOUR-IP:8000/api/webhook/line
+          </div>
+          <div style="color:var(--muted);margin-top:4px">นำ URL นี้ไปวางใน LINE Developers Console → Webhook URL</div>
+        </div>
+        <div class="form-group" style="margin:0"><label>Broadcast ข้อความ</label>
+          <textarea id="broadcast-msg" placeholder="พิมพ์ข้อความที่ต้องการส่งถึงลูกค้าทุกคน..." rows="3"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="sendBroadcast()" style="background:#06c755;width:fit-content">
+          💬 ส่ง Broadcast
+        </button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">📊 LINE Stats</span></div>
+      <div style="display:flex;flex-direction:column;gap:12px;font-size:14px">
+        <div style="display:flex;justify-content:space-between"><span>ลูกค้าจาก LINE</span><b>${msgs.messages.filter(m=>m.direction==='in').length}</b></div>
+        <div style="display:flex;justify-content:space-between"><span>ข้อความรับ</span><b>${msgs.messages.filter(m=>m.direction==='in').length}</b></div>
+        <div style="display:flex;justify-content:space-between"><span>ข้อความส่ง</span><b>${msgs.messages.filter(m=>m.direction==='out').length}</b></div>
+        <hr style="border:none;border-top:1px solid var(--border)">
+        <div style="font-size:12px;color:var(--muted)">
+          <b>Auto-reply:</b> เมื่อลูกค้า follow → ระบบบันทึกข้อมูลอัตโนมัติ<br>
+          <b>Webhook Events:</b> follow, message
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">💬 ข้อความล่าสุด</span></div>
+    <div class="table-wrap">
+      <table><thead><tr><th>ลูกค้า</th><th>ข้อความ</th><th>ทิศทาง</th><th>วันที่</th></tr></thead>
+      <tbody>${(msgs.messages||[]).map(m=>`<tr>
+        <td style="font-size:13px">${m.customer_name||m.line_display_name||m.line_user_id?.slice(0,12)||'BROADCAST'}</td>
+        <td style="max-width:300px">${m.message}</td>
+        <td>${m.direction==='in'?'<span class="pill pill-info">📥 รับ</span>':'<span class="pill pill-success">📤 ส่ง</span>'}</td>
+        <td style="font-size:12px;color:var(--muted)">${fmtDate(m.created_at)}</td>
+      </tr>`).join('')||'<tr><td colspan=4><div class="empty"><div class="empty-icon">💬</div>ยังไม่มีข้อความ</div></td></tr>'}</tbody></table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><span class="card-title">📋 คู่มือการตั้งค่า LINE OA</span></div>
+    <div style="font-size:13px;line-height:2;color:var(--text)">
+      <b>1.</b> ไปที่ <a href="https://developers.line.biz" target="_blank" style="color:var(--primary)">LINE Developers Console</a><br>
+      <b>2.</b> เลือก Provider → สร้าง Messaging API Channel<br>
+      <b>3.</b> คัดลอก <b>Channel Secret</b> และ <b>Channel Access Token</b><br>
+      <b>4.</b> ไปที่ <b>ตั้งค่า</b> ในระบบนี้และวางค่าที่ได้<br>
+      <b>5.</b> วาง Webhook URL ในหน้า LINE Developers → Messaging API → Webhook URL<br>
+      <b>6.</b> เปิดใช้งาน "Use webhook" และคลิก Verify
+    </div>
+  </div>`;
+}
+
+async function sendBroadcast() {
+  const msg = document.getElementById('broadcast-msg')?.value;
+  if(!msg?.trim()) return toast('กรุณาพิมพ์ข้อความ','error');
+  const settings = await api('/api/settings') || {};
+  const r = await api('/api/line/broadcast', {method:'POST',
+    body:JSON.stringify({message:msg, channel_token:settings.line_channel_token||''})});
+  if(r?.success) {
+    toast(`ส่ง Broadcast สำเร็จ (${r.status})`, 'success');
+    document.getElementById('broadcast-msg').value = '';
+    renderLine();
+  }
+}
+
+// ─── TIKTOK ──────────────────────────────────
+async function renderTikTok() {
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const [orders, ads] = await Promise.all([api('/api/tiktok/orders'), api('/api/tiktok/ads')]);
+  if(!orders || !ads) return;
+
+  const totalRevenue = (ads.campaigns||[]).reduce((s,c)=>s+c.revenue,0);
+  const totalSpend = (ads.campaigns||[]).reduce((s,c)=>s+c.spend,0);
+  const avgRoas = totalSpend>0?(totalRevenue/totalSpend).toFixed(2):0;
+
+  document.getElementById('content').innerHTML = `
+  <div class="grid grid-4" style="margin-bottom:16px">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#f3f4f6">🎵</div>
+      <div><div class="stat-value">${fmt(orders.total)}</div><div class="stat-label">TikTok Orders</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#fce7f3">💰</div>
+      <div><div class="stat-value">${fmtB(totalRevenue)}</div><div class="stat-label">รายได้จาก Ads</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#fef3c7">📢</div>
+      <div><div class="stat-value">${fmtB(totalSpend)}</div><div class="stat-label">ค่าโฆษณา</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#d1fae5">📊</div>
+      <div><div class="stat-value">${avgRoas}x</div><div class="stat-label">ROAS เฉลี่ย</div></div>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-header"><span class="card-title">📢 Ad Campaigns</span></div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Campaign</th><th class="th-r">Impressions</th><th class="th-r">Clicks</th><th class="th-r">Spend</th><th class="th-r">Revenue</th><th class="th-r">ROAS</th></tr></thead>
+        <tbody>${(ads.campaigns||[]).map(c=>`<tr>
+          <td style="font-size:13px;font-weight:500">${c.campaign_name}</td>
+          <td class="td-r" style="font-size:13px">${fmt(c.impressions)}</td>
+          <td class="td-r" style="font-size:13px">${fmt(c.clicks)}</td>
+          <td class="td-r" style="font-size:13px">${fmtB(c.spend)}</td>
+          <td class="td-r" style="font-weight:600">${fmtB(c.revenue)}</td>
+          <td class="td-r"><span class="pill ${c.roas>=3?'pill-success':c.roas>=2?'pill-warning':'pill-danger'}">${c.roas}x</span></td>
+        </tr>`).join('')}</tbody></table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">📈 รายได้ vs ค่าโฆษณา (30 วัน)</span></div>
+      <div class="chart-container"><canvas id="adsChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">🛒 TikTok Orders</span></div>
+    <div class="table-wrap">
+      <table><thead><tr><th>Order ID</th><th>ลูกค้า</th><th>สินค้า</th><th class="th-r">ยอด</th><th>สถานะ</th><th>วันที่</th></tr></thead>
+      <tbody>${(orders.orders||[]).map(o=>`<tr>
+        <td style="font-family:monospace;font-size:12px">${o.tiktok_order_id}</td>
+        <td>${o.customer_name}</td>
+        <td style="font-size:12px;color:var(--muted)">${o.items_json}</td>
+        <td class="td-r" style="font-weight:600">฿${fmt(o.total)}</td>
+        <td>${statusPill(o.status)}</td>
+        <td style="font-size:12px;color:var(--muted)">${fmtDate(o.created_at)}</td>
+      </tr>`).join('')}</tbody></table>
+    </div>
+  </div>`;
+
+  if(document.getElementById('adsChart')) {
+    const daily = (ads.daily||[]).slice(0,14).reverse();
+    charts.ads = new Chart(document.getElementById('adsChart'), {
+      type:'bar', data:{
+        labels: daily.map(d=>d.date.slice(5)),
+        datasets:[
+          {label:'รายได้',data:daily.map(d=>d.revenue),backgroundColor:'rgba(99,102,241,.7)'},
+          {label:'ค่าโฆษณา',data:daily.map(d=>d.spend),backgroundColor:'rgba(239,68,68,.4)'}
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},
+        scales:{y:{ticks:{callback:v=>'฿'+fmt(v)}}}}
+    });
+  }
+}
+
+// ─── ANALYTICS ───────────────────────────────
+async function renderAnalytics() {
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const d = await api('/api/analytics?days=30');
+  if(!d) return;
+
+  document.getElementById('content').innerHTML = `
+  <div class="grid grid-3" style="margin-bottom:16px">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#ede9fe">💰</div>
+      <div><div class="stat-value">${fmtB(d.total_revenue)}</div><div class="stat-label">รายได้ทั้งหมด</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#dbeafe">🛒</div>
+      <div><div class="stat-value">${fmt(d.total_orders)}</div><div class="stat-label">ออเดอร์ทั้งหมด</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#d1fae5">👥</div>
+      <div><div class="stat-value">${fmt(d.total_customers)}</div><div class="stat-label">ลูกค้าทั้งหมด</div></div>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-header"><span class="card-title">📈 รายได้ 30 วัน</span></div>
+      <div class="chart-container"><canvas id="revChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">📡 รายได้แยกช่องทาง</span></div>
+      <div class="chart-container"><canvas id="chanChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">🏆 สินค้าขายดี Top 10</span>
+      <button class="btn btn-secondary btn-sm" onclick="exportCSV()">📥 Export CSV</button>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr><th>#</th><th>สินค้า</th><th>หมวดหมู่</th><th class="th-r">ขายได้</th><th class="th-r">รายได้</th><th>% ของรายได้รวม</th></tr></thead>
+      <tbody>${(d.top_products||[]).map((p,i)=>{
+        const pct = d.total_revenue>0?(p.revenue/d.total_revenue*100).toFixed(1):0;
+        return `<tr>
+          <td style="color:var(--muted)">${i+1}</td>
+          <td style="font-weight:500">${p.name}</td>
+          <td><span class="pill pill-default">${p.category}</span></td>
+          <td class="td-r">${fmt(p.sold)}</td>
+          <td class="td-r" style="font-weight:600">${fmtB(p.revenue)}</td>
+          <td style="min-width:160px"><div style="display:flex;align-items:center;gap:8px"><div class="progress" style="flex:1"><div class="progress-bar" style="width:${pct}%;background:var(--primary)"></div></div><span style="font-size:12px;color:var(--muted)">${pct}%</span></div></td>
+        </tr>`;
+      }).join('')}</tbody></table>
+    </div>
+  </div>`;
+
+  const labels = (d.revenue_trend||[]).map(r=>r.day.slice(5));
+  const revData = (d.revenue_trend||[]).map(r=>r.revenue);
+  if(document.getElementById('revChart')) {
+    charts.rev = new Chart(document.getElementById('revChart'), {
+      type:'bar', data:{labels,datasets:[{label:'รายได้',data:revData,
+        backgroundColor:'rgba(99,102,241,.7)',borderRadius:4}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{y:{ticks:{callback:v=>'฿'+fmt(v)}}}}
+    });
+  }
+  const chLabels = (d.by_channel||[]).map(c=>c.channel);
+  const chData = (d.by_channel||[]).map(c=>c.revenue);
+  if(document.getElementById('chanChart')) {
+    charts.chan = new Chart(document.getElementById('chanChart'), {
+      type:'pie', data:{labels:chLabels,datasets:[{data:chData,
+        backgroundColor:['#6366f1','#06c755','#1a1a1a','#06b6d4']}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}
+    });
+  }
+}
+
+function exportCSV() {
+  api('/api/analytics').then(d=>{
+    if(!d) return;
+    const rows = [['สินค้า','หมวดหมู่','ขายได้','รายได้']];
+    (d.top_products||[]).forEach(p=>rows.push([p.name,p.category,p.sold,p.revenue]));
+    const csv = rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+    const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `smart-e-report-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    toast('Export CSV สำเร็จ','success');
+  });
+}
+
+// ─── SETTINGS ────────────────────────────────
+async function renderSettings() {
+  const s = await api('/api/settings') || {};
+  document.getElementById('content').innerHTML = `
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="card-header"><span class="card-title">🏪 ข้อมูลร้านค้า</span></div>
+      <form onsubmit="saveSettings(event)">
+        <div class="form-group"><label>ชื่อร้าน</label><input name="shop_name" value="${s.shop_name||'Smart-E Shop'}"></div>
+        <div class="form-group"><label>โทรศัพท์ร้าน</label><input name="shop_phone" value="${s.shop_phone||''}"></div>
+        <div class="form-group"><label>เบอร์ PromptPay</label><input name="promptpay_phone" placeholder="08XXXXXXXX" value="${s.promptpay_phone||''}"></div>
+        <button type="submit" class="btn btn-primary">💾 บันทึก</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">💬 LINE Messaging API</span></div>
+      <form onsubmit="saveLineSettings(event)">
+        <div class="form-group"><label>Channel Access Token</label><input name="line_channel_token" type="password" placeholder="xxxxxx..." value="${s.line_channel_token||''}"></div>
+        <div class="form-group"><label>Channel Secret</label><input name="line_channel_secret" type="password" placeholder="xxxxxx..." value="${s.line_channel_secret||''}"></div>
+        <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;font-size:12px;margin-bottom:12px">
+          <b>Webhook URL:</b><br>
+          <code>http://YOUR-IP:8000/api/webhook/line</code>
+        </div>
+        <button type="submit" class="btn btn-primary">💾 บันทึก LINE</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">🎵 TikTok API</span></div>
+      <form onsubmit="saveTikTokSettings(event)">
+        <div class="form-group"><label>App ID</label><input name="tiktok_app_id" value="${s.tiktok_app_id||''}"></div>
+        <div class="form-group"><label>App Secret</label><input name="tiktok_app_secret" type="password" value="${s.tiktok_app_secret||''}"></div>
+        <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px;font-size:12px;margin-bottom:12px">
+          ⚠️ TikTok API ต้องการ TikTok Business Account และการยืนยันตัวตน
+        </div>
+        <button type="submit" class="btn btn-primary">💾 บันทึก TikTok</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">ℹ️ เกี่ยวกับระบบ</span></div>
+      <div style="font-size:13px;line-height:2;color:var(--muted)">
+        <div>⚡ <b>Smart-E Platform</b> v1.0</div>
+        <div>🐍 Python stdlib + SQLite</div>
+        <div>💻 ไม่ต้องติดตั้งแพ็กเกจเพิ่ม</div>
+        <div>🔗 API: <code>http://localhost:8000/api/</code></div>
+        <div style="margin-top:8px">
+          <button class="btn btn-danger btn-sm" onclick="if(confirm('ล้างข้อมูลทั้งหมด?')){}">🗑️ ล้างข้อมูล</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function saveSettings(e) {
+  e.preventDefault();
+  await api('/api/settings', {method:'POST', body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});
+  toast('บันทึกการตั้งค่าแล้ว','success');
+}
+async function saveLineSettings(e) { e.preventDefault(); await saveSettings(e); }
+async function saveTikTokSettings(e) { e.preventDefault(); await saveSettings(e); }
+
+// ─── INIT ─────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  navigate('dashboard');
+  // Mark active nav item
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.addEventListener('click', function() {
+      document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+});
+</script>
+</body>
+</html>
