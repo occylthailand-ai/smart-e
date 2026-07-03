@@ -1,0 +1,12 @@
+# Runtime SQLite DB — server.py/seed.py always write to ~/smart_e.db (home dir),
+# never to a repo-relative path, so a committed *.db here is always stale.
+*.db
+*.db-journal
+
+# LibreOffice/OpenOffice lock files
+.~lock.*#
+
+node_modules/
+dist/
+__pycache__/
+*.pyc
