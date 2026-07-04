@@ -22,6 +22,21 @@ DB_PATH = os.path.join(os.path.expanduser("~"), "smart_e.db")
 FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "index.html")
 PORT = 8000
 
+# Every API route below (dashboard/products/orders/customers/payments/tiktok/
+# analytics/settings/line messages+broadcast) had zero authentication — anyone
+# who could reach this port could read all customer PII (name/email/phone/LINE
+# user ID), delete products, confirm fake payments, and send real LINE
+# broadcast messages to customers. ADMIN_KEY gates all of it now. Left unset
+# by default so a fresh deploy fails closed (503, not silently wide open)
+# until an admin actually sets it — matches the fail-closed pattern already
+# used for webhook secrets elsewhere in this project family.
+ADMIN_KEY = os.environ.get('ADMIN_KEY', '')
+# /api/webhook/line is called by LINE's platform, not an admin — it needs its
+# own signature check (LINE Messaging API's HMAC-SHA256-over-raw-body scheme),
+# not the admin key. It previously had no verification at all: anyone could
+# POST fake "follow"/"message" events and inject fake customers/messages.
+LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET', '')
+
 # ─────────────────────────────────────────────
 # DATABASE SETUP
 # ─────────────────────────────────────────────
@@ -197,14 +212,34 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
     def read_body(self):
         length = int(self.headers.get('Content-Length', 0))
         if length:
-            return json.loads(self.rfile.read(length).decode('utf-8'))
+            self._raw_body = self.rfile.read(length)
+            return json.loads(self._raw_body.decode('utf-8'))
+        self._raw_body = b''
         return {}
+
+    def _require_admin(self):
+        if not ADMIN_KEY:
+            self.send_json({'error': 'ADMIN_KEY not set on server — refusing all API access until an admin configures it'}, 503)
+            return False
+        if not hmac.compare_digest(self.headers.get('X-Admin-Key', ''), ADMIN_KEY):
+            self.send_json({'error': 'Unauthorized'}, 401)
+            return False
+        return True
+
+    def _verify_line_signature(self, raw_body):
+        if not LINE_CHANNEL_SECRET:
+            return False
+        signature = self.headers.get('X-Line-Signature', '')
+        expected = base64.b64encode(
+            hmac.new(LINE_CHANNEL_SECRET.encode('utf-8'), raw_body, hashlib.sha256).digest()
+        ).decode('utf-8')
+        return hmac.compare_digest(signature, expected)
 
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type,X-Line-Signature')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type,X-Line-Signature,X-Admin-Key')
         self.end_headers()
 
     def do_GET(self):
@@ -217,6 +252,9 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
                     self.send_html(f.read())
             else:
                 self.send_html("<h1>Smart-E</h1><p>Frontend not found. Place index.html next to server.py.</p>")
+            return
+
+        if not self._require_admin():
             return
 
         # ── API Routes ──
@@ -253,6 +291,17 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         path = urllib.parse.urlparse(self.path).path
         body = self.read_body()
 
+        # LINE's platform calls this, not an admin -- verify via signature, not X-Admin-Key
+        if path == '/api/webhook/line':
+            if not self._verify_line_signature(self._raw_body):
+                self.send_json({'error': 'Invalid or missing LINE signature'}, 401)
+                return
+            self._line_webhook(body)
+            return
+
+        if not self._require_admin():
+            return
+
         if path == '/api/products':
             self._create_product(body)
         elif path == '/api/orders':
@@ -263,8 +312,6 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
             self._create_qr(body)
         elif path == '/api/payments/confirm':
             self._confirm_payment(body)
-        elif path == '/api/webhook/line':
-            self._line_webhook(body)
         elif path == '/api/line/broadcast':
             self._line_broadcast(body)
         elif path == '/api/settings':
@@ -275,6 +322,9 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
     def do_PUT(self):
         path = urllib.parse.urlparse(self.path).path
         body = self.read_body()
+
+        if not self._require_admin():
+            return
 
         m = re.match(r'^/api/products/(\d+)$', path)
         if m:
@@ -295,6 +345,10 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         path = urllib.parse.urlparse(self.path).path
+
+        if not self._require_admin():
+            return
+
         m = re.match(r'^/api/products/(\d+)$', path)
         if m:
             self._delete_product(int(m.group(1)))
