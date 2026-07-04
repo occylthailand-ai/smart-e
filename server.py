@@ -19,7 +19,7 @@ from datetime import datetime, date, timedelta
 import math
 
 DB_PATH = os.path.join(os.path.expanduser("~"), "smart_e.db")
-FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "..", "frontend", "index.html")
+FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "index.html")
 PORT = 8000
 
 # ─────────────────────────────────────────────
@@ -216,7 +216,7 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
                 with open(FRONTEND_PATH, 'r', encoding='utf-8') as f:
                     self.send_html(f.read())
             else:
-                self.send_html("<h1>Smart-E</h1><p>Frontend not found. Place index.html in frontend/</p>")
+                self.send_html("<h1>Smart-E</h1><p>Frontend not found. Place index.html next to server.py.</p>")
             return
 
         # ── API Routes ──
