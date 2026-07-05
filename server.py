@@ -535,16 +535,23 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         self.send_json({'orders': orders, 'total': len(orders)})
 
     def _create_order(self, body):
+        # เดิมถ้า items ไม่ใช่ list ของ dict (เช่น ส่ง string มาแทน) จะ crash ด้วย
+        # AttributeError ที่ไม่ได้ดักไว้ -- request handler process เดียวตายไปเงียบๆ
+        # (empty response ให้ client) แทนที่จะตอบ 400 error ที่อ่านได้ว่าผิดพลาดตรงไหน
+        items = body.get('items', [])
+        if not isinstance(items, list) or not all(isinstance(i, dict) for i in items):
+            self.send_json({'error': 'items ต้องเป็น array ของ {product_id, product_name, qty, price}'}, 400)
+            return
         conn = get_db()
         c = conn.cursor()
-        total = sum(item.get('price',0) * item.get('qty',1) for item in body.get('items', []))
+        total = sum(item.get('price',0) * item.get('qty',1) for item in items)
         c.execute("""INSERT INTO orders (customer_id,customer_name,status,channel,total,note,address)
                      VALUES (?,?,?,?,?,?,?)""",
                   (body.get('customer_id'), body.get('customer_name','ลูกค้าทั่วไป'),
                    body.get('status','pending'), body.get('channel','web'),
                    total, body.get('note',''), body.get('address','')))
         oid = c.lastrowid
-        for item in body.get('items', []):
+        for item in items:
             c.execute("""INSERT INTO order_items (order_id,product_id,product_name,qty,price)
                          VALUES (?,?,?,?,?)""",
                       (oid, item.get('product_id'), item.get('product_name',''),
