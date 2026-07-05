@@ -213,7 +213,10 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         length = int(self.headers.get('Content-Length', 0))
         if length:
             self._raw_body = self.rfile.read(length)
-            return json.loads(self._raw_body.decode('utf-8'))
+            try:
+                return json.loads(self._raw_body.decode('utf-8'))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return None
         self._raw_body = b''
         return {}
 
@@ -290,6 +293,9 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path
         body = self.read_body()
+        if body is None:
+            self.send_json({'error': 'Invalid JSON body'}, 400)
+            return
 
         # LINE's platform calls this, not an admin -- verify via signature, not X-Admin-Key
         if path == '/api/webhook/line':
@@ -322,6 +328,9 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
     def do_PUT(self):
         path = urllib.parse.urlparse(self.path).path
         body = self.read_body()
+        if body is None:
+            self.send_json({'error': 'Invalid JSON body'}, 400)
+            return
 
         if not self._require_admin():
             return
@@ -469,12 +478,18 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({'error': 'Not found'}, 404)
 
     def _create_product(self, body):
+        try:
+            price = float(body.get('price', 0))
+            stock = int(body.get('stock', 0))
+        except (TypeError, ValueError):
+            self.send_json({'error': 'price ต้องเป็นตัวเลข และ stock ต้องเป็นจำนวนเต็ม'}, 400)
+            return
         conn = get_db()
         c = conn.cursor()
         c.execute("""INSERT INTO products (name,description,price,stock,category,image_url)
                      VALUES (?,?,?,?,?,?)""",
                   (body.get('name',''), body.get('description',''),
-                   float(body.get('price',0)), int(body.get('stock',0)),
+                   price, stock,
                    body.get('category','ทั่วไป'), body.get('image_url','')))
         pid = c.lastrowid
         conn.commit()
@@ -663,7 +678,11 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
 
     def _create_qr(self, body):
         phone = body.get('phone', '0800000000')
-        amount = float(body.get('amount', 0))
+        try:
+            amount = float(body.get('amount', 0))
+        except (TypeError, ValueError):
+            self.send_json({'error': 'amount ต้องเป็นตัวเลข'}, 400)
+            return
         order_id = body.get('order_id')
         payload = generate_promptpay_payload(phone, amount)
         ref_code = base64.b32encode(os.urandom(5)).decode()[:8]
@@ -861,6 +880,9 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         self.send_json(rows)
 
     def _save_settings(self, body):
+        if not isinstance(body, dict):
+            self.send_json({'error': 'settings ต้องเป็น object ของ key/value'}, 400)
+            return
         conn = get_db()
         c = conn.cursor()
         for key, value in body.items():
