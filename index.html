@@ -219,12 +219,29 @@ const API = '';
 let charts = {};
 
 // ─── Utils ───────────────────────────────────
+// server.py now gates every API route behind X-Admin-Key (see server.py's
+// _require_admin) -- ask for it once, keep it in localStorage, and re-prompt
+// if the server ever rejects it (wrong/rotated key) instead of failing silently.
+function getAdminKey() {
+  let k = localStorage.getItem('smart_e_admin_key');
+  if (!k) {
+    k = (window.prompt('กรอก Admin Key เพื่อเข้าใช้งานระบบ') || '').trim();
+    if (k) localStorage.setItem('smart_e_admin_key', k);
+  }
+  return k;
+}
+
 async function api(path, opts={}) {
   try {
     const r = await fetch(API + path, {
-      headers: {'Content-Type':'application/json'},
+      headers: {'Content-Type':'application/json', 'X-Admin-Key': getAdminKey()},
       ...opts
     });
+    if (r.status === 401) {
+      localStorage.removeItem('smart_e_admin_key');
+      alert('Admin Key ไม่ถูกต้อง กรุณาโหลดหน้านี้ใหม่แล้วกรอกใหม่');
+      return null;
+    }
     return await r.json();
   } catch(e) { return null; }
 }
@@ -282,7 +299,7 @@ function toggleSidebar() {
 
 function navigate(page) {
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  event?.currentTarget?.classList.add('active');
+  event?.currentTarget?.classList?.add('active');
   const titles = {dashboard:'Dashboard',products:'สินค้า',orders:'คำสั่งซื้อ',customers:'ลูกค้า / CRM',
     payments:'ชำระเงิน',line:'LINE Integration',tiktok:'TikTok',analytics:'Analytics',settings:'ตั้งค่า'};
   document.getElementById('page-title').textContent = titles[page] || page;
