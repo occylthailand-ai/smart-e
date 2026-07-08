@@ -242,8 +242,15 @@ async function api(path, opts={}) {
       alert('Admin Key ไม่ถูกต้อง กรุณาโหลดหน้านี้ใหม่แล้วกรอกใหม่');
       return null;
     }
-    return await r.json();
-  } catch(e) { return null; }
+    const data = await r.json().catch(() => null);
+    // เดิมคืน JSON โดยไม่ดู r.ok เลย -- ตั้งแต่ backend เริ่มตอบ 400 กับข้อมูลผิดรูป
+    // (price ไม่ใช่ตัวเลข ฯลฯ) ฝั่งนี้ก็ยังโชว์ toast "สำเร็จ" แล้วปิดฟอร์มทั้งที่ไม่มีอะไรถูกบันทึก
+    if (!r.ok) {
+      toast((data && data.error) || `เกิดข้อผิดพลาด (HTTP ${r.status})`, 'error');
+      return null;
+    }
+    return data;
+  } catch(e) { toast('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้', 'error'); return null; }
 }
 
 function fmt(n) {
@@ -470,7 +477,7 @@ async function saveProduct(e, id) {
   body.stock = parseInt(body.stock);
   const method = id ? 'PUT' : 'POST';
   const url = id ? `/api/products/${id}` : '/api/products';
-  await api(url, {method, body: JSON.stringify(body)});
+  if (await api(url, {method, body: JSON.stringify(body)}) === null) return;
   closeModal();
   toast(id?'อัปเดตสินค้าแล้ว':'เพิ่มสินค้าแล้ว','success');
   renderProducts();
@@ -478,7 +485,7 @@ async function saveProduct(e, id) {
 
 async function deleteProduct(id) {
   if(!confirm('ต้องการลบสินค้านี้?')) return;
-  await api(`/api/products/${id}`, {method:'DELETE'});
+  if (await api(`/api/products/${id}`, {method:'DELETE'}) === null) return;
   toast('ลบสินค้าแล้ว','success');
   renderProducts();
 }
@@ -528,7 +535,7 @@ async function renderOrders(statusFilter='', channelFilter='') {
 }
 
 async function updateOrderStatus(id, status) {
-  await api(`/api/orders/${id}/status`, {method:'PUT', body:JSON.stringify({status})});
+  if (await api(`/api/orders/${id}/status`, {method:'PUT', body:JSON.stringify({status})}) === null) return;
   toast(`อัปเดตสถานะเป็น "${status}"`, 'success');
 }
 
@@ -598,7 +605,7 @@ async function createOrder(e) {
     note: f.get('note'),
     items
   };
-  await api('/api/orders', {method:'POST', body:JSON.stringify(body)});
+  if (await api('/api/orders', {method:'POST', body:JSON.stringify(body)}) === null) return;
   closeModal();
   toast('สร้างออเดอร์สำเร็จ', 'success');
   renderOrders();
@@ -701,7 +708,7 @@ async function saveCustomer(e, id) {
   const body = Object.fromEntries(new FormData(e.target));
   const method = id ? 'PUT' : 'POST';
   const url = id ? `/api/customers/${id}` : '/api/customers';
-  await api(url, {method, body:JSON.stringify(body)});
+  if (await api(url, {method, body:JSON.stringify(body)}) === null) return;
   closeModal();
   toast(id?'อัปเดตลูกค้าแล้ว':'เพิ่มลูกค้าแล้ว','success');
   renderCustomers();
@@ -790,7 +797,7 @@ async function createQR(e) {
 }
 
 async function confirmPayment(id) {
-  await api('/api/payments/confirm', {method:'POST', body:JSON.stringify({id})});
+  if (await api('/api/payments/confirm', {method:'POST', body:JSON.stringify({id})}) === null) return;
   toast('ยืนยันการชำระแล้ว','success');
   renderPayments();
 }
@@ -1101,7 +1108,7 @@ async function renderSettings() {
 
 async function saveSettings(e) {
   e.preventDefault();
-  await api('/api/settings', {method:'POST', body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});
+  if (await api('/api/settings', {method:'POST', body:JSON.stringify(Object.fromEntries(new FormData(e.target)))}) === null) return;
   toast('บันทึกการตั้งค่าแล้ว','success');
 }
 async function saveLineSettings(e) { e.preventDefault(); await saveSettings(e); }
