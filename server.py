@@ -499,6 +499,18 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         self.send_json(row, 201)
 
     def _update_product(self, pid, body):
+        # POST /api/products ตรวจ price/stock เป็นตัวเลขแล้ว แต่ PUT เดิมรับอะไรก็ได้ --
+        # SQLite เก็บ string "abc" ลงคอลัมน์ price ได้เฉยๆ แล้วพังปลายทาง (สต๊อกจริงถูก
+        # เขียนทับเป็น 0 ตอน order decrement เพราะ 'xyz' ถูก coerce เป็น 0)
+        if 'price' in body or 'stock' in body:
+            try:
+                if 'price' in body:
+                    body['price'] = float(body['price'])
+                if 'stock' in body:
+                    body['stock'] = int(body['stock'])
+            except (TypeError, ValueError):
+                self.send_json({'error': 'price ต้องเป็นตัวเลข และ stock ต้องเป็นจำนวนเต็ม'}, 400)
+                return
         conn = get_db()
         c = conn.cursor()
         fields = []
