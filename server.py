@@ -569,9 +569,24 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         if not isinstance(items, list) or not all(isinstance(i, dict) for i in items):
             self.send_json({'error': 'items ต้องเป็น array ของ {product_id, product_name, qty, price}'}, 400)
             return
+        # เดิม price/qty ในแต่ละ item ไม่เคยถูกตรวจเป็นตัวเลข -- ถ้าส่ง price:"abc" มา sum() จะ
+        # ระเบิดด้วย TypeError (int + str) แล้วตอบ empty response (crash class เดียวกับที่ไฟล์นี้
+        # ดักไว้แล้วสำหรับ shape ของ items) ส่วน qty ติดลบจะทำให้ MAX(0,stock-(-5)) = stock+5
+        # คือ "สั่งซื้อ" แล้วสต๊อกเพิ่มขึ้น และ total/รายได้/ยอดใช้จ่ายลูกค้าเพี้ยนตามไปด้วย --
+        # ตรวจ+coerce แบบเดียวกับ _create_product ก่อนนำไปใช้คำนวณและบันทึก
+        for item in items:
+            try:
+                item['price'] = float(item.get('price', 0))
+                item['qty'] = int(item.get('qty', 1))
+            except (TypeError, ValueError):
+                self.send_json({'error': 'price และ qty ของสินค้าแต่ละรายการต้องเป็นตัวเลข'}, 400)
+                return
+            if item['price'] < 0 or item['qty'] < 1:
+                self.send_json({'error': 'price ต้องไม่ติดลบ และ qty ต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป'}, 400)
+                return
         conn = get_db()
         c = conn.cursor()
-        total = sum(item.get('price',0) * item.get('qty',1) for item in items)
+        total = sum(item['price'] * item['qty'] for item in items)
         c.execute("""INSERT INTO orders (customer_id,customer_name,status,channel,total,note,address)
                      VALUES (?,?,?,?,?,?,?)""",
                   (body.get('customer_id'), body.get('customer_name','ลูกค้าทั่วไป'),
