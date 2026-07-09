@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import os
 import re
+import traceback
 import urllib.parse
 import urllib.request
 from datetime import datetime, date, timedelta
@@ -245,7 +246,29 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Headers', 'Content-Type,X-Line-Signature,X-Admin-Key')
         self.end_headers()
 
-    def do_GET(self):
+    def _guard(self, fn):
+        # ตัวครอบ dispatcher ทุก HTTP method — เดิมถ้า handler โยน exception (เช่น DB
+        # error, ค่าที่แปลงชนิดไม่ได้) exception จะหลุดออกจาก BaseHTTPRequestHandler
+        # แล้ว connection ถูกปิดโดยไม่ส่ง response เลย (client เห็น empty reply / 000)
+        # ที่นี่ดักไว้แล้วตอบ 500 JSON ที่อ่านได้แทน — กัน crash-class ทั้งที่มีอยู่และ
+        # ที่จะเกิดในอนาคตทุกจุดในทีเดียว
+        try:
+            fn()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        except Exception:
+            traceback.print_exc()
+            try:
+                self.send_json({'error': 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์'}, 500)
+            except Exception:
+                pass
+
+    def do_GET(self):    self._guard(self._dispatch_get)
+    def do_POST(self):   self._guard(self._dispatch_post)
+    def do_PUT(self):    self._guard(self._dispatch_put)
+    def do_DELETE(self): self._guard(self._dispatch_delete)
+
+    def _dispatch_get(self):
         path = urllib.parse.urlparse(self.path).path
         query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(self.path).query))
 
@@ -290,7 +313,7 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         else:
             self.send_json({'error': 'Not found'}, 404)
 
-    def do_POST(self):
+    def _dispatch_post(self):
         path = urllib.parse.urlparse(self.path).path
         body = self.read_body()
         if body is None:
@@ -325,7 +348,7 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         else:
             self.send_json({'error': 'Not found'}, 404)
 
-    def do_PUT(self):
+    def _dispatch_put(self):
         path = urllib.parse.urlparse(self.path).path
         body = self.read_body()
         if body is None:
@@ -352,7 +375,7 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
 
         self.send_json({'error': 'Not found'}, 404)
 
-    def do_DELETE(self):
+    def _dispatch_delete(self):
         path = urllib.parse.urlparse(self.path).path
 
         if not self._require_admin():
