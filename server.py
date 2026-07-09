@@ -609,12 +609,41 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         conn.close()
         self.send_json(row, 201)
 
+    # สถานะที่อนุญาต = ที่ dropdown ฝั่ง UI ตั้งได้ (pending/confirmed/shipped/delivered/cancelled)
+    # รวมกับที่มีอยู่จริงในข้อมูล/หลังบ้าน (paid/processing) -- เดิมรับ status อะไรก็ได้รวมถึง None
+    # ทำให้คอลัมน์เป็น NULL หรือค่าขยะ แล้ว dashboard ที่ query ตาม status เพี้ยนตาม
+    ORDER_STATUSES = {'pending', 'confirmed', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'}
+
     def _update_order_status(self, oid, body):
+        new_status = body.get('status')
+        if new_status not in self.ORDER_STATUSES:
+            self.send_json({'error': 'status ต้องเป็นหนึ่งใน: ' + ', '.join(sorted(self.ORDER_STATUSES))}, 400)
+            return
         conn = get_db()
-        conn.execute("UPDATE orders SET status=? WHERE id=?", (body.get('status'), oid))
+        c = conn.cursor()
+        row = c.execute("SELECT status FROM orders WHERE id=?", (oid,)).fetchone()
+        if row is None:
+            conn.close()
+            self.send_json({'error': 'ไม่พบออเดอร์นี้'}, 404)
+            return
+        # เดิมยกเลิกออเดอร์แล้วสต๊อกที่ถูกตัดตอน _create_order ไม่เคยถูกคืนเลย -- สต๊อกจริงลดลง
+        # ถาวรทุกครั้งที่ยกเลิก คืนสต๊อกเมื่อเปลี่ยนเข้า 'cancelled' จากสถานะที่ยังไม่ยกเลิก และ
+        # ตัดกลับเมื่อ "ยกเลิกการยกเลิก" (cancelled -> active) เพื่อไม่ให้ได้สต๊อกฟรีจากการสลับสถานะ
+        was_cancelled = (row['status'] == 'cancelled')
+        now_cancelled = (new_status == 'cancelled')
+        if now_cancelled != was_cancelled:
+            items = c.execute("SELECT product_id, qty FROM order_items WHERE order_id=?", (oid,)).fetchall()
+            for it in items:
+                if it['product_id'] is None:
+                    continue
+                if now_cancelled:
+                    c.execute("UPDATE products SET stock=stock+? WHERE id=?", (it['qty'], it['product_id']))
+                else:
+                    c.execute("UPDATE products SET stock=MAX(0,stock-?) WHERE id=?", (it['qty'], it['product_id']))
+        c.execute("UPDATE orders SET status=? WHERE id=?", (new_status, oid))
         conn.commit()
         conn.close()
-        self.send_json({'success': True, 'id': oid, 'status': body.get('status')})
+        self.send_json({'success': True, 'id': oid, 'status': new_status})
 
     # ──────────────────────────────────────────
     # CUSTOMERS
