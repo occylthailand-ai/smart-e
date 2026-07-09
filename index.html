@@ -253,6 +253,10 @@ async function api(path, opts={}) {
   } catch(e) { toast('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้', 'error'); return null; }
 }
 
+function escapeHtml(v) {
+  if (v === null || v === undefined) return '';
+  return String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 function fmt(n) {
   return new Intl.NumberFormat('th-TH').format(Math.round(n || 0));
 }
@@ -361,13 +365,13 @@ async function renderDashboard() {
     <div class="card">
       <div class="card-header"><span class="card-title">🏆 สินค้าขายดี</span></div>
       <table><thead><tr><th>สินค้า</th><th class="th-r">ขายได้</th><th class="th-r">รายได้</th></tr></thead>
-      <tbody>${(d.top_products||[]).map(p=>`<tr><td>${p.name}</td><td class="td-r">${fmt(p.sold)}</td><td class="td-r">${fmtB(p.revenue)}</td></tr>`).join('')||'<tr><td colspan=3 style="text-align:center;color:var(--muted)">ยังไม่มีข้อมูล</td></tr>'}</tbody></table>
+      <tbody>${(d.top_products||[]).map(p=>`<tr><td>${escapeHtml(p.name)}</td><td class="td-r">${fmt(p.sold)}</td><td class="td-r">${fmtB(p.revenue)}</td></tr>`).join('')||'<tr><td colspan=3 style="text-align:center;color:var(--muted)">ยังไม่มีข้อมูล</td></tr>'}</tbody></table>
     </div>
     <div class="card">
       <div class="card-header"><span class="card-title">📋 ออเดอร์ล่าสุด</span>
         <button class="btn btn-secondary btn-sm" onclick="navigate('orders')">ดูทั้งหมด</button></div>
       <table><thead><tr><th>#</th><th>ลูกค้า</th><th>ช่องทาง</th><th class="th-r">ยอด</th><th>สถานะ</th></tr></thead>
-      <tbody>${(d.recent_orders||[]).map(o=>`<tr><td>#${o.id}</td><td>${o.customer_name}</td><td>${channelPill(o.channel)}</td><td class="td-r">${fmtB(o.total)}</td><td>${statusPill(o.status)}</td></tr>`).join('')||'<tr><td colspan=5 style="text-align:center;color:var(--muted)">ยังไม่มีข้อมูล</td></tr>'}</tbody></table>
+      <tbody>${(d.recent_orders||[]).map(o=>`<tr><td>#${o.id}</td><td>${escapeHtml(o.customer_name)}</td><td>${channelPill(o.channel)}</td><td class="td-r">${fmtB(o.total)}</td><td>${statusPill(o.status)}</td></tr>`).join('')||'<tr><td colspan=5 style="text-align:center;color:var(--muted)">ยังไม่มีข้อมูล</td></tr>'}</tbody></table>
     </div>
   </div>`;
 
@@ -405,7 +409,7 @@ async function renderProducts() {
     <div style="display:flex;gap:8px;align-items:center">
       <select id="cat-filter" onchange="filterProducts()" style="width:160px">
         <option value="">ทุกหมวด</option>
-        ${(d.categories||[]).map(c=>`<option>${c}</option>`).join('')}
+        ${(d.categories||[]).map(c=>`<option>${escapeHtml(c)}</option>`).join('')}
       </select>
       <button class="btn btn-primary" onclick="openProductModal()">+ เพิ่มสินค้า</button>
     </div>
@@ -423,8 +427,8 @@ function renderProductRows(products) {
   if(!products.length) return '<tr><td colspan=6><div class="empty"><div class="empty-icon">📦</div>ไม่มีสินค้า</div></td></tr>';
   return products.map(p=>`<tr>
     <td style="color:var(--muted)">#${p.id}</td>
-    <td><div style="font-weight:500">${p.name}</div><div style="font-size:12px;color:var(--muted)">${p.description||''}</div></td>
-    <td><span class="pill pill-default">${p.category}</span></td>
+    <td><div style="font-weight:500">${escapeHtml(p.name)}</div><div style="font-size:12px;color:var(--muted)">${escapeHtml(p.description||'')}</div></td>
+    <td><span class="pill pill-default">${escapeHtml(p.category)}</span></td>
     <td class="td-r" style="font-weight:600">฿${fmt(p.price)}</td>
     <td class="td-r"><span style="color:${p.stock<10?'var(--danger)':p.stock<30?'var(--warning)':'var(--success)'};font-weight:600">${p.stock}</span></td>
     <td><div style="display:flex;gap:6px">
@@ -452,8 +456,8 @@ async function openProductModal(id=null) {
   }
   openModal(id ? 'แก้ไขสินค้า' : 'เพิ่มสินค้าใหม่', `
   <form onsubmit="saveProduct(event,${id})">
-    <div class="form-group"><label>ชื่อสินค้า *</label><input name="name" required value="${p.name||''}"></div>
-    <div class="form-group"><label>คำอธิบาย</label><textarea name="description">${p.description||''}</textarea></div>
+    <div class="form-group"><label>ชื่อสินค้า *</label><input name="name" required value="${escapeHtml(p.name||'')}"></div>
+    <div class="form-group"><label>คำอธิบาย</label><textarea name="description">${escapeHtml(p.description||'')}</textarea></div>
     <div class="grid grid-2">
       <div class="form-group"><label>ราคา (฿) *</label><input name="price" type="number" step="0.01" required value="${p.price||''}"></div>
       <div class="form-group"><label>สต็อก *</label><input name="stock" type="number" required value="${p.stock||0}"></div>
@@ -507,7 +511,7 @@ async function renderOrders(statusFilter='', channelFilter='') {
         ${statuses.map(s=>`<option value="${s}" ${s===statusFilter?'selected':''}>${s||'ทุกสถานะ'}</option>`).join('')}
       </select>
       <select onchange="renderOrders('${statusFilter}', this.value)" style="width:140px">
-        ${channels.map(c=>`<option value="${c}" ${c===channelFilter?'selected':''}>${c||'ทุกช่องทาง'}</option>`).join('')}
+        ${channels.map(c=>`<option value="${escapeHtml(c)}" ${c===channelFilter?'selected':''}>${escapeHtml(c||'ทุกช่องทาง')}</option>`).join('')}
       </select>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
@@ -520,8 +524,8 @@ async function renderOrders(statusFilter='', channelFilter='') {
       <table><thead><tr><th>#</th><th>ลูกค้า</th><th>สินค้า</th><th>ช่องทาง</th><th class="th-r">ยอด</th><th>สถานะ</th><th>วันที่</th><th>จัดการ</th></tr></thead>
       <tbody>${(d.orders||[]).map(o=>`<tr>
         <td style="color:var(--muted)">#${o.id}</td>
-        <td style="font-weight:500">${o.customer_name}</td>
-        <td style="font-size:12px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis">${o.items_summary||'-'}</td>
+        <td style="font-weight:500">${escapeHtml(o.customer_name)}</td>
+        <td style="font-size:12px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(o.items_summary||'-')}</td>
         <td>${channelPill(o.channel)}</td>
         <td class="td-r" style="font-weight:600">฿${fmt(o.total)}</td>
         <td>${statusPill(o.status)}</td>
@@ -547,14 +551,14 @@ async function openOrderModal() {
     <div class="form-group"><label>ลูกค้า</label>
       <select name="customer_id" onchange="fillCustomerName(this)">
         <option value="">-- ลูกค้าทั่วไป --</option>
-        ${custs.customers.map(c=>`<option value="${c.id}" data-name="${c.name}">${c.name} (${c.phone||c.email||''})</option>`).join('')}
+        ${custs.customers.map(c=>`<option value="${c.id}" data-name="${escapeHtml(c.name)}">${escapeHtml(c.name)} (${escapeHtml(c.phone||c.email||'')})</option>`).join('')}
       </select></div>
     <div class="form-group"><label>ชื่อลูกค้า</label><input name="customer_name" id="order-cname" placeholder="หรือระบุชื่อใหม่"></div>
     <div class="form-group"><label>ช่องทาง</label>
       <select name="channel"><option>web</option><option>line</option><option>tiktok</option></select></div>
     <div class="form-group"><label>สินค้า</label>
       <select id="add-product-sel" style="margin-bottom:8px">
-        ${prods.products.map(p=>`<option value="${p.id}" data-price="${p.price}" data-name="${p.name}">฿${fmt(p.price)} — ${p.name}</option>`).join('')}
+        ${prods.products.map(p=>`<option value="${p.id}" data-price="${p.price}" data-name="${escapeHtml(p.name)}">฿${fmt(p.price)} — ${escapeHtml(p.name)}</option>`).join('')}
       </select>
       <div style="display:flex;gap:8px">
         <input id="add-qty" type="number" value="1" min="1" style="width:80px">
@@ -636,9 +640,9 @@ async function renderCustomers() {
 function renderCustomerRows(customers) {
   if(!customers.length) return '<tr><td colspan=8><div class="empty"><div class="empty-icon">👥</div>ไม่มีข้อมูลลูกค้า</div></td></tr>';
   return customers.map(c=>`<tr>
-    <td><div style="font-weight:500">${c.name}</div><div style="font-size:12px;color:var(--muted)">${c.email||''}</div></td>
-    <td style="font-size:13px">${c.phone||'-'}</td>
-    <td>${c.line_display_name ? `<span class="pill pill-line">💬 ${c.line_display_name}</span>` : '<span style="color:var(--muted);font-size:12px">-</span>'}</td>
+    <td><div style="font-weight:500">${escapeHtml(c.name)}</div><div style="font-size:12px;color:var(--muted)">${escapeHtml(c.email||'')}</div></td>
+    <td style="font-size:13px">${escapeHtml(c.phone||'-')}</td>
+    <td>${c.line_display_name ? `<span class="pill pill-line">💬 ${escapeHtml(c.line_display_name)}</span>` : '<span style="color:var(--muted);font-size:12px">-</span>'}</td>
     <td>${tagPill(c.tag||'ทั่วไป')}</td>
     <td class="td-r">${fmt(c.total_orders)}</td>
     <td class="td-r" style="font-weight:600">${fmtB(c.total_spent)}</td>
@@ -673,9 +677,9 @@ async function viewCustomer(id) {
   </div>
   <div style="margin-bottom:16px"><b>ข้อมูลติดต่อ</b>
     <div style="font-size:13px;margin-top:8px;display:flex;flex-direction:column;gap:4px">
-      <div>📧 ${c.email||'-'}</div>
-      <div>📱 ${c.phone||'-'}</div>
-      ${c.line_display_name?`<div>💬 LINE: ${c.line_display_name}</div>`:''}
+      <div>📧 ${escapeHtml(c.email||'-')}</div>
+      <div>📱 ${escapeHtml(c.phone||'-')}</div>
+      ${c.line_display_name?`<div>💬 LINE: ${escapeHtml(c.line_display_name)}</div>`:''}
     </div>
   </div>
   <b>ออเดอร์ล่าสุด</b>
@@ -689,10 +693,10 @@ async function openCustomerModal(id=null) {
   if(id) c = await api(`/api/customers/${id}`) || {};
   openModal(id?'แก้ไขลูกค้า':'เพิ่มลูกค้าใหม่', `
   <form onsubmit="saveCustomer(event,${id})">
-    <div class="form-group"><label>ชื่อ *</label><input name="name" required value="${c.name||''}"></div>
+    <div class="form-group"><label>ชื่อ *</label><input name="name" required value="${escapeHtml(c.name||'')}"></div>
     <div class="grid grid-2">
-      <div class="form-group"><label>อีเมล</label><input name="email" type="email" value="${c.email||''}"></div>
-      <div class="form-group"><label>โทรศัพท์</label><input name="phone" value="${c.phone||''}"></div>
+      <div class="form-group"><label>อีเมล</label><input name="email" type="email" value="${escapeHtml(c.email||'')}"></div>
+      <div class="form-group"><label>โทรศัพท์</label><input name="phone" value="${escapeHtml(c.phone||'')}"></div>
     </div>
     <div class="form-group"><label>แท็ก</label>
       <select name="tag">${['ทั่วไป','ใหม่','ประจำ','VIP','LINE'].map(t=>`<option ${c.tag===t?'selected':''}>${t}</option>`).join('')}</select></div>
@@ -738,7 +742,7 @@ async function renderPayments() {
       <div class="card-header"><span class="card-title">🧾 สร้าง QR PromptPay</span></div>
       <form onsubmit="createQR(event)">
         <div class="form-group"><label>เบอร์ PromptPay</label>
-          <input id="qr-phone" name="phone" placeholder="08XXXXXXXX" value="${settings.promptpay_phone||''}" required></div>
+          <input id="qr-phone" name="phone" placeholder="08XXXXXXXX" value="${escapeHtml(settings.promptpay_phone||'')}" required></div>
         <div class="form-group"><label>จำนวนเงิน (฿)</label>
           <input id="qr-amount" name="amount" type="number" step="0.01" placeholder="0 = ไม่ระบุจำนวน" value="0"></div>
         <button type="submit" class="btn btn-primary" style="width:100%">🔳 สร้าง QR Code</button>
@@ -766,8 +770,8 @@ async function renderPayments() {
       <tbody>${(d.payments||[]).map(p=>`<tr>
         <td style="color:var(--muted)">#${p.id}</td>
         <td>${p.order_id?`#${p.order_id}`:'-'}</td>
-        <td>${p.customer_name||'-'}</td>
-        <td><span class="pill pill-info">${p.method}</span></td>
+        <td>${escapeHtml(p.customer_name||'-')}</td>
+        <td><span class="pill pill-info">${escapeHtml(p.method)}</span></td>
         <td class="td-r" style="font-weight:600">฿${fmt(p.amount)}</td>
         <td>${p.status==='paid'?'<span class="pill pill-success">ชำระแล้ว</span>':'<span class="pill pill-warning">รอชำระ</span>'}</td>
         <td style="font-size:12px;color:var(--muted)">${fmtDate(p.created_at)}</td>
@@ -849,8 +853,8 @@ async function renderLine() {
     <div class="table-wrap">
       <table><thead><tr><th>ลูกค้า</th><th>ข้อความ</th><th>ทิศทาง</th><th>วันที่</th></tr></thead>
       <tbody>${(msgs.messages||[]).map(m=>`<tr>
-        <td style="font-size:13px">${m.customer_name||m.line_display_name||m.line_user_id?.slice(0,12)||'BROADCAST'}</td>
-        <td style="max-width:300px">${m.message}</td>
+        <td style="font-size:13px">${escapeHtml(m.customer_name||m.line_display_name||m.line_user_id?.slice(0,12)||'BROADCAST')}</td>
+        <td style="max-width:300px">${escapeHtml(m.message)}</td>
         <td>${m.direction==='in'?'<span class="pill pill-info">📥 รับ</span>':'<span class="pill pill-success">📤 ส่ง</span>'}</td>
         <td style="font-size:12px;color:var(--muted)">${fmtDate(m.created_at)}</td>
       </tr>`).join('')||'<tr><td colspan=4><div class="empty"><div class="empty-icon">💬</div>ยังไม่มีข้อความ</div></td></tr>'}</tbody></table>
@@ -939,9 +943,9 @@ async function renderTikTok() {
     <div class="table-wrap">
       <table><thead><tr><th>Order ID</th><th>ลูกค้า</th><th>สินค้า</th><th class="th-r">ยอด</th><th>สถานะ</th><th>วันที่</th></tr></thead>
       <tbody>${(orders.orders||[]).map(o=>`<tr>
-        <td style="font-family:monospace;font-size:12px">${o.tiktok_order_id}</td>
-        <td>${o.customer_name}</td>
-        <td style="font-size:12px;color:var(--muted)">${o.items_json}</td>
+        <td style="font-family:monospace;font-size:12px">${escapeHtml(o.tiktok_order_id)}</td>
+        <td>${escapeHtml(o.customer_name)}</td>
+        <td style="font-size:12px;color:var(--muted)">${escapeHtml(o.items_json)}</td>
         <td class="td-r" style="font-weight:600">฿${fmt(o.total)}</td>
         <td>${statusPill(o.status)}</td>
         <td style="font-size:12px;color:var(--muted)">${fmtDate(o.created_at)}</td>
@@ -1008,8 +1012,8 @@ async function renderAnalytics() {
         const pct = d.total_revenue>0?(p.revenue/d.total_revenue*100).toFixed(1):0;
         return `<tr>
           <td style="color:var(--muted)">${i+1}</td>
-          <td style="font-weight:500">${p.name}</td>
-          <td><span class="pill pill-default">${p.category}</span></td>
+          <td style="font-weight:500">${escapeHtml(p.name)}</td>
+          <td><span class="pill pill-default">${escapeHtml(p.category)}</span></td>
           <td class="td-r">${fmt(p.sold)}</td>
           <td class="td-r" style="font-weight:600">${fmtB(p.revenue)}</td>
           <td style="min-width:160px"><div style="display:flex;align-items:center;gap:8px"><div class="progress" style="flex:1"><div class="progress-bar" style="width:${pct}%;background:var(--primary)"></div></div><span style="font-size:12px;color:var(--muted)">${pct}%</span></div></td>
@@ -1062,17 +1066,17 @@ async function renderSettings() {
     <div class="card">
       <div class="card-header"><span class="card-title">🏪 ข้อมูลร้านค้า</span></div>
       <form onsubmit="saveSettings(event)">
-        <div class="form-group"><label>ชื่อร้าน</label><input name="shop_name" value="${s.shop_name||'Smart-E Shop'}"></div>
-        <div class="form-group"><label>โทรศัพท์ร้าน</label><input name="shop_phone" value="${s.shop_phone||''}"></div>
-        <div class="form-group"><label>เบอร์ PromptPay</label><input name="promptpay_phone" placeholder="08XXXXXXXX" value="${s.promptpay_phone||''}"></div>
+        <div class="form-group"><label>ชื่อร้าน</label><input name="shop_name" value="${escapeHtml(s.shop_name||'Smart-E Shop')}"></div>
+        <div class="form-group"><label>โทรศัพท์ร้าน</label><input name="shop_phone" value="${escapeHtml(s.shop_phone||'')}"></div>
+        <div class="form-group"><label>เบอร์ PromptPay</label><input name="promptpay_phone" placeholder="08XXXXXXXX" value="${escapeHtml(s.promptpay_phone||'')}"></div>
         <button type="submit" class="btn btn-primary">💾 บันทึก</button>
       </form>
     </div>
     <div class="card">
       <div class="card-header"><span class="card-title">💬 LINE Messaging API</span></div>
       <form onsubmit="saveLineSettings(event)">
-        <div class="form-group"><label>Channel Access Token</label><input name="line_channel_token" type="password" placeholder="xxxxxx..." value="${s.line_channel_token||''}"></div>
-        <div class="form-group"><label>Channel Secret</label><input name="line_channel_secret" type="password" placeholder="xxxxxx..." value="${s.line_channel_secret||''}"></div>
+        <div class="form-group"><label>Channel Access Token</label><input name="line_channel_token" type="password" placeholder="xxxxxx..." value="${escapeHtml(s.line_channel_token||'')}"></div>
+        <div class="form-group"><label>Channel Secret</label><input name="line_channel_secret" type="password" placeholder="xxxxxx..." value="${escapeHtml(s.line_channel_secret||'')}"></div>
         <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;font-size:12px;margin-bottom:12px">
           <b>Webhook URL:</b><br>
           <code>http://YOUR-IP:8000/api/webhook/line</code>
@@ -1083,8 +1087,8 @@ async function renderSettings() {
     <div class="card">
       <div class="card-header"><span class="card-title">🎵 TikTok API</span></div>
       <form onsubmit="saveTikTokSettings(event)">
-        <div class="form-group"><label>App ID</label><input name="tiktok_app_id" value="${s.tiktok_app_id||''}"></div>
-        <div class="form-group"><label>App Secret</label><input name="tiktok_app_secret" type="password" value="${s.tiktok_app_secret||''}"></div>
+        <div class="form-group"><label>App ID</label><input name="tiktok_app_id" value="${escapeHtml(s.tiktok_app_id||'')}"></div>
+        <div class="form-group"><label>App Secret</label><input name="tiktok_app_secret" type="password" value="${escapeHtml(s.tiktok_app_secret||'')}"></div>
         <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px;font-size:12px;margin-bottom:12px">
           ⚠️ TikTok API ต้องการ TikTok Business Account และการยืนยันตัวตน
         </div>
