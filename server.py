@@ -764,11 +764,21 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         })
 
     def _confirm_payment(self, body):
+        pay_id = body.get('id')
+        # เดิมยิง UPDATE ด้วย id อะไรก็ได้ (รวม None ตอนไม่ส่ง id มา) แล้วตอบ success:True เสมอ
+        # แม้ไม่มีแถวไหนถูกแก้เลย -- แอดมินกดยืนยันการชำระของใบที่ไม่มีอยู่/พิมพ์ id ผิด ก็เห็นว่า
+        # "สำเร็จ" ทั้งที่ไม่มีอะไรเกิดขึ้นจริง ตรวจว่ามีรายการชำระอยู่จริงก่อน ไม่งั้นตอบ 404
         conn = get_db()
-        conn.execute("UPDATE payments SET status='paid' WHERE id=?", (body.get('id'),))
+        c = conn.cursor()
+        row = c.execute("SELECT id FROM payments WHERE id=?", (pay_id,)).fetchone()
+        if row is None:
+            conn.close()
+            self.send_json({'error': 'ไม่พบรายการชำระเงินนี้'}, 404)
+            return
+        c.execute("UPDATE payments SET status='paid' WHERE id=?", (pay_id,))
         conn.commit()
         conn.close()
-        self.send_json({'success': True})
+        self.send_json({'success': True, 'id': row['id'], 'status': 'paid'})
 
     # ──────────────────────────────────────────
     # LINE WEBHOOK
