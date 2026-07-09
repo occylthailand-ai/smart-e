@@ -555,7 +555,15 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
             sql += " WHERE " + " AND ".join(where)
         sql += " GROUP BY o.id ORDER BY o.created_at DESC"
         if limit := query.get('limit'):
-            sql += f" LIMIT {int(limit)}"
+            # เดิม int(limit) ตรงๆ ทำให้ ?limit=abc โยน ValueError → do_GET ไม่มี try/except
+            # ครอบ คำขอจึงตายแบบ empty reply แทนที่จะได้ error ที่อ่านได้ — ละเว้นค่าที่ไม่ใช่
+            # จำนวนเต็มบวก (คืนทั้งหมด)
+            try:
+                lim = int(limit)
+            except (TypeError, ValueError):
+                lim = 0
+            if lim > 0:
+                sql += f" LIMIT {lim}"
         c.execute(sql, params)
         orders = [dict(r) for r in c.fetchall()]
         conn.close()
@@ -889,7 +897,12 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
     def _get_analytics(self, query={}):
         conn = get_db()
         c = conn.cursor()
-        days = int(query.get('days', 30))
+        # ?days=abc เดิมโยน ValueError → คำขอตายแบบ empty reply (do_GET ไม่มี try/except)
+        try:
+            days = int(query.get('days', 30))
+        except (TypeError, ValueError):
+            days = 30
+        days = max(1, min(365, days))
         start = (date.today() - timedelta(days=days)).isoformat()
 
         c.execute("""SELECT date(created_at) as day,
