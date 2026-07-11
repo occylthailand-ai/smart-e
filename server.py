@@ -770,6 +770,12 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         except (TypeError, ValueError):
             self.send_json({'error': 'amount ต้องเป็นตัวเลข'}, 400)
             return
+        # amount=0 (หรือเว้นว่าง) = QR แบบให้ผู้จ่ายกรอกยอดเอง (generate_promptpay_payload
+        # จะไม่ใส่ tag จำนวนเงิน) -- อนุญาต แต่ค่าติดลบไม่มีความหมาย: QR จะกลายเป็นแบบไม่ระบุยอด
+        # เงียบๆ ขณะที่แถว payments กลับถูกบันทึกยอดติดลบ ทำให้ยอดรวมรายได้/สถิติเพี้ยน -- ปฏิเสธไป
+        if amount < 0:
+            self.send_json({'error': 'amount ต้องไม่ติดลบ (ใส่ 0 หรือเว้นว่างสำหรับ QR แบบให้ผู้จ่ายกรอกยอดเอง)'}, 400)
+            return
         order_id = body.get('order_id')
         payload = generate_promptpay_payload(phone, amount)
         ref_code = base64.b32encode(os.urandom(5)).decode()[:8]
