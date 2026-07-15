@@ -19,9 +19,13 @@ import urllib.request
 from datetime import datetime, date, timedelta
 import math
 
-DB_PATH = os.path.join(os.path.expanduser("~"), "smart_e.db")
+# DB_PATH/PORT are env-overridable so the server can run against an isolated
+# database/port (deployments with a custom data dir, and the regression test in
+# test_server.py which spins up a throwaway db on an alt port). Defaults are
+# unchanged, so existing runs behave exactly as before.
+DB_PATH = os.environ.get('SMART_E_DB') or os.path.join(os.path.expanduser("~"), "smart_e.db")
 FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "index.html")
-PORT = 8000
+PORT = int(os.environ.get('PORT', '8000'))
 
 # Every API route below (dashboard/products/orders/customers/payments/tiktok/
 # analytics/settings/line messages+broadcast) had zero authentication — anyone
