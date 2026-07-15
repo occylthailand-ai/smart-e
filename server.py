@@ -617,6 +617,26 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
                 return
         conn = get_db()
         c = conn.cursor()
+        # ป้องกันการสั่งเกินสต๊อก: เดิม _create_order ตัดสต๊อกด้วย MAX(0,stock-qty) (ปัดเหลือ 0
+        # เมื่อสั่งเกิน) แต่ _update_order_status ตอนยกเลิกคืนด้วย stock+qty แบบไม่ปัด -- สั่งเกิน
+        # สต๊อกแล้วยกเลิกจึง "เสก" สต๊อกเพิ่มจากอากาศ (5 -> สั่ง 10 -> 0 -> ยกเลิก -> 10) ตรวจ
+        # สต๊อกให้พอก่อนรับออเดอร์ เพื่อให้การตัด/คืนสมมาตรเสมอ (รวม qty ต่อ product_id เผื่อ
+        # สินค้าเดียวกันถูกส่งมาซ้ำหลายรายการ)
+        need = {}
+        for item in items:
+            pid = item.get('product_id')
+            if pid is not None:
+                need[pid] = need.get(pid, 0) + item['qty']
+        for pid, want in need.items():
+            prow = c.execute("SELECT name, stock FROM products WHERE id=?", (pid,)).fetchone()
+            if prow is None:
+                conn.close()
+                self.send_json({'error': f'ไม่พบสินค้า id={pid}'}, 400)
+                return
+            if want > prow['stock']:
+                conn.close()
+                self.send_json({'error': f'สต๊อกไม่พอสำหรับ "{prow["name"]}" (มี {prow["stock"]} ต้องการ {want})'}, 400)
+                return
         total = sum(item['price'] * item['qty'] for item in items)
         c.execute("""INSERT INTO orders (customer_id,customer_name,status,channel,total,note,address)
                      VALUES (?,?,?,?,?,?,?)""",
