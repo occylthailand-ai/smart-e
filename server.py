@@ -150,20 +150,45 @@ def init_db():
 # PROMPTPAY QR GENERATOR (EMV QR Code Format)
 # ─────────────────────────────────────────────
 
+def _resolve_promptpay_target(raw: str):
+    """Map a merchant identifier to (sub-tag, value) for the PromptPay merchant account.
+      - mobile number  -> ('01', '0066' + 9 significant digits)   any local/intl form
+      - national/tax ID -> ('02', <13 digits>)                     business PromptPay
+      - e-wallet ID     -> ('03', <15 digits>)
+    """
+    digits = re.sub(r'\D', '', raw or '')
+    # Already-canonical mobile form 0066XXXXXXXXX (13 chars). Checked before the 13-digit
+    # national-ID case, which it would otherwise collide with (national IDs never start 0066).
+    if digits.startswith('0066') and len(digits) == 13:
+        return '01', digits
+    if len(digits) == 15:
+        return '03', digits
+    if len(digits) == 13:
+        return '02', digits
+    # Mobile number in any other form -> strip the local "0" or intl "66" prefix, then re-add 0066.
+    if digits.startswith('66'):
+        digits = digits[2:]
+    elif digits.startswith('0'):
+        digits = digits[1:]
+    return '01', '0066' + digits
+
+
 def generate_promptpay_payload(phone_or_id: str, amount: float = None) -> str:
     """Generate EMV QR Code payload string for PromptPay"""
     def tlv(tag: str, value: str) -> str:
         length = f"{len(value):02d}"
         return f"{tag}{length}{value}"
 
-    # Format phone number to PromptPay format
-    phone = re.sub(r'\D', '', phone_or_id)
-    if phone.startswith('0') and len(phone) == 10:
-        phone = '0066' + phone[1:]
-    elif not phone.startswith('0066'):
-        phone = '0066' + phone
+    # Resolve the PromptPay target. It can be a mobile number (sub-tag 01, formatted as
+    # 0066 + the 9 significant digits), a 13-digit national/tax ID (sub-tag 02 — how a
+    # business/OTOP shop usually registers PromptPay), or a 15-digit e-wallet ID (sub-tag 03).
+    # The old code only ever used sub-tag 01 and blindly prefixed "0066": a number already in
+    # intl form ("66..." or "+66...") became "006666..." (double 66 -> an invalid PromptPay ID,
+    # so the QR points at no real account and the merchant never gets paid), and a national ID
+    # was mangled into sub-tag 01. Normalise all common forms and pick the correct sub-tag.
+    target_tag, target_val = _resolve_promptpay_target(phone_or_id)
 
-    merchant_info = tlv('01', phone)
+    merchant_info = tlv(target_tag, target_val)
     gui = tlv('00', 'A000000677010111')
     merchant_account = tlv('29', gui + merchant_info)
     # Point of Initiation Method (tag 01): "12" = dynamic (single transaction, amount

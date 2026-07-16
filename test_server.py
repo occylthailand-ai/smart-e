@@ -172,6 +172,35 @@ def main():
         p0 = qr0['payload']
         check(p0[-4:] == crc16_ccitt(p0[:-4]), f'CRC-16 valid on no-amount QR (appended {p0[-4:]})')
 
+        print('\n=== PromptPay target resolution (right sub-tag + no double-66 mangling) ===')
+        # The merchant id inside tag 29 is where the money actually goes. It must resolve to
+        # the correct EMVCo sub-tag and value: a mobile in ANY form -> ("01", 0066+9 digits);
+        # a 13-digit national/tax ID -> ("02", as-is); a 15-digit e-wallet -> ("03", as-is).
+        # The old code always used "01" and blindly prefixed "0066", so an intl-form number
+        # ("66..."/"+66...") became "006666..." — an invalid target the merchant never receives.
+        def merchant_subfield(payload):
+            tag29 = parse_tlv(payload).get('29', '')
+            sub = parse_tlv(tag29)  # sub-tags share the TLV shape
+            for t in ('01', '02', '03'):
+                if t in sub:
+                    return t, sub[t]
+            return None, None
+        cases = [
+            ('0812345678',      '01', '0066812345678', 'local mobile 0-prefixed'),
+            ('66812345678',     '01', '0066812345678', 'intl mobile 66-prefixed (no double 66)'),
+            ('+66 81-234-5678', '01', '0066812345678', 'intl mobile with punctuation'),
+            ('0066812345678',   '01', '0066812345678', 'already-canonical mobile unchanged'),
+            ('1234567890123',   '02', '1234567890123', '13-digit national/tax ID -> sub-tag 02'),
+            ('123456789012345', '03', '123456789012345', '15-digit e-wallet -> sub-tag 03'),
+        ]
+        for phone, want_tag, want_val, label in cases:
+            st, q = req('POST', '/api/payments/qr', {'phone': phone, 'amount': 10})
+            got_tag, got_val = merchant_subfield(q['payload']) if st == 200 else (None, None)
+            check(st == 200 and (got_tag, got_val) == (want_tag, want_val),
+                  f'{label}: {phone!r} -> ({got_tag},{got_val}) want ({want_tag},{want_val})')
+            check(st == 200 and q['payload'][-4:] == crc16_ccitt(q['payload'][:-4]),
+                  f'{label}: CRC-16 valid')
+
         print(f'\n=== RESULT: {passed} passed, {failed} failed ===')
         return 1 if failed else 0
     finally:
