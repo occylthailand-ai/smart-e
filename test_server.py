@@ -95,6 +95,27 @@ def main():
         check(st == 400, f'two qty-3 line items of one product vs stock 5 -> 400 (got {st})')
         check(stock(pid) == 5, 'stock unchanged after rejected duplicate-item oversell')
 
+        print('\n=== status-toggle stock accounting (no free stock by flipping status) ===')
+        # _update_order_status restores stock on ->cancelled and re-deducts on cancelled->active,
+        # gated by `now_cancelled != was_cancelled`. That gate is what stops an admin from minting
+        # free stock by cancelling the same order twice (or the reverse). Implemented but untested
+        # until now — pin it. Fresh product so earlier assertions' stock state stays isolated.
+        pid2 = req('POST', '/api/products', {'name': 'T2', 'price': 50, 'stock': 4})[1]['id']
+        st, o2 = req('POST', '/api/orders', {'items': [{'product_id': pid2, 'product_name': 'T2', 'qty': 3, 'price': 50}]})
+        oid2 = o2['id']
+        check(st == 201 and stock(pid2) == 1, f'order qty 3 -> stock 4->1 (got {st}, stock {stock(pid2)})')
+        req('PUT', f'/api/orders/{oid2}/status', {'status': 'cancelled'})
+        check(stock(pid2) == 4, 'cancel restores stock 1->4')
+        req('PUT', f'/api/orders/{oid2}/status', {'status': 'cancelled'})
+        check(stock(pid2) == 4, 'cancel AGAIN is idempotent -> stock stays 4 (not conjured to 7)')
+        req('PUT', f'/api/orders/{oid2}/status', {'status': 'confirmed'})
+        check(stock(pid2) == 1, 'un-cancel (cancelled->confirmed) re-deducts 3 -> stock 4->1')
+        req('PUT', f'/api/orders/{oid2}/status', {'status': 'shipped'})
+        check(stock(pid2) == 1, 'active->active (confirmed->shipped) leaves stock untouched (stays 1)')
+        st, _ = req('PUT', f'/api/orders/{oid2}/status', {'status': 'bogus'})
+        check(st == 400, f'invalid status value -> 400 (got {st})')
+        check(stock(pid2) == 1, 'stock untouched after a rejected invalid-status update')
+
         print('\n=== missing payment confirm -> 404 (not false success) ===')
         st, _ = req('POST', '/api/payments/999999/confirm', {})
         check(st == 404, f'confirm nonexistent payment -> 404 (got {st})')
