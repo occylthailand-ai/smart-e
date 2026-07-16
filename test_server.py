@@ -45,6 +45,30 @@ def stock(pid):
     return req('GET', f'/api/products/{pid}')[1]['stock']
 
 
+def parse_tlv(s):
+    """Parse an EMVCo QR string into {tag: value}. Top-level only."""
+    out = {}
+    i = 0
+    while i < len(s):
+        tag = s[i:i + 2]
+        ln = int(s[i + 2:i + 4])
+        out[tag] = s[i + 4:i + 4 + ln]
+        i = i + 4 + ln
+    return out
+
+
+def crc16_ccitt(payload):
+    """CRC-16/CCITT-FALSE over the payload up to and including '6304' — the EMVCo
+    checksum a banking app recomputes; if it doesn't match, every app rejects the QR."""
+    crc = 0xFFFF
+    for ch in payload.encode('utf-8'):
+        crc ^= ch << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) if (crc & 0x8000) else (crc << 1)
+            crc &= 0xFFFF
+    return f"{crc:04X}"
+
+
 def main():
     dbfd, dbpath = tempfile.mkstemp(suffix='.db'); os.close(dbfd); os.remove(dbpath)
     env = {**os.environ, 'SMART_E_DB': dbpath, 'PORT': str(PORT), 'ADMIN_KEY': KEY}
@@ -119,6 +143,34 @@ def main():
         print('\n=== missing payment confirm -> 404 (not false success) ===')
         st, _ = req('POST', '/api/payments/999999/confirm', {})
         check(st == 404, f'confirm nonexistent payment -> 404 (got {st})')
+
+        print('\n=== PromptPay QR payload (EMVCo structure + CRC + static/dynamic method) ===')
+        # The QR is what a customer actually scans to pay. If the CRC-16 or TLV structure is
+        # wrong, every banking app rejects it. And the Point of Initiation Method (tag 01) must
+        # match reuse semantics: "12" = dynamic/single-use when an amount is embedded, "11" =
+        # static/reusable when the payer fills in the amount (the amount=0 case _create_qr
+        # supports). It was hardcoded "12" for both, so a reusable "fill-in-amount" QR was
+        # advertised as single-use (some apps blackhole a reused "12"). Assert both cases here.
+        st, qr = req('POST', '/api/payments/qr', {'phone': '0812345678', 'amount': 150})
+        check(st == 200 and 'payload' in qr, f'qr create with amount -> 200 + payload (got {st})')
+        d = parse_tlv(qr['payload'])
+        check(d.get('00') == '01', 'tag00 payload-format-indicator == "01"')
+        check(d.get('01') == '12', f'tag01 == "12" (dynamic) when amount embedded (got {d.get("01")!r})')
+        check(d.get('53') == '764', 'tag53 currency == "764" (THB)')
+        check(d.get('54') == '150.00', f'tag54 amount == "150.00" (got {d.get("54")!r})')
+        check(d.get('58') == 'TH', 'tag58 country == "TH"')
+        check(d.get('29', '').startswith('0016A000000677010111'),
+              'tag29 merchant account carries the PromptPay AID')
+        p = qr['payload']
+        check(p[-4:] == crc16_ccitt(p[:-4]), f'CRC-16 valid (appended {p[-4:]})')
+
+        st, qr0 = req('POST', '/api/payments/qr', {'phone': '0812345678'})  # no amount
+        check(st == 200, f'qr create without amount -> 200 (got {st})')
+        d0 = parse_tlv(qr0['payload'])
+        check(d0.get('01') == '11', f'tag01 == "11" (static/reusable) when no amount (got {d0.get("01")!r})')
+        check('54' not in d0, 'no tag54 amount on a fill-in-amount QR')
+        p0 = qr0['payload']
+        check(p0[-4:] == crc16_ccitt(p0[:-4]), f'CRC-16 valid on no-amount QR (appended {p0[-4:]})')
 
         print(f'\n=== RESULT: {passed} passed, {failed} failed ===')
         return 1 if failed else 0

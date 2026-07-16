@@ -166,9 +166,17 @@ def generate_promptpay_payload(phone_or_id: str, amount: float = None) -> str:
     merchant_info = tlv('01', phone)
     gui = tlv('00', 'A000000677010111')
     merchant_account = tlv('29', gui + merchant_info)
-    payload = tlv('00', '01') + tlv('01', '12') + merchant_account + tlv('53', '764')
+    # Point of Initiation Method (tag 01): "12" = dynamic (single transaction, amount
+    # embedded), "11" = static (reusable, payer fills in the amount). This was hardcoded
+    # to "12" even for the no-amount case that _create_qr explicitly supports as a
+    # "payer enters the amount" QR — a "12" code with no amount tag is contradictory
+    # per the EMVCo/PromptPay spec, and some bank apps treat "12" as single-use and
+    # reject/blackhole a reused code. Pick the method that matches whether an amount is set.
+    has_amount = bool(amount and amount > 0)
+    poi = '12' if has_amount else '11'
+    payload = tlv('00', '01') + tlv('01', poi) + merchant_account + tlv('53', '764')
 
-    if amount and amount > 0:
+    if has_amount:
         amount_str = f"{amount:.2f}"
         payload += tlv('54', amount_str)
 
