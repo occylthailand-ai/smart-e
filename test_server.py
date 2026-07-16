@@ -45,6 +45,14 @@ def stock(pid):
     return req('GET', f'/api/products/{pid}')[1]['stock']
 
 
+def spent(cid):
+    return req('GET', f'/api/customers/{cid}')[1]['total_spent']
+
+
+def orders_count(cid):
+    return req('GET', f'/api/customers/{cid}')[1]['total_orders']
+
+
 def parse_tlv(s):
     """Parse an EMVCo QR string into {tag: value}. Top-level only."""
     out = {}
@@ -139,6 +147,24 @@ def main():
         st, _ = req('PUT', f'/api/orders/{oid2}/status', {'status': 'bogus'})
         check(st == 400, f'invalid status value -> 400 (got {st})')
         check(stock(pid2) == 1, 'stock untouched after a rejected invalid-status update')
+
+        print('\n=== customer spend accounting (cancel must return spend, symmetric with stock) ===')
+        # _create_order bumps the customer's total_orders/total_spent; cancelling an order
+        # restores stock but historically left total_spent inflated forever, so a customer who
+        # only ever cancels floats to the top of the total_spent-ranked list. Spend must move
+        # symmetrically with the order's active state, exactly like stock does above.
+        cid = req('POST', '/api/customers', {'name': 'สมชาย ทดสอบ'})[1]['id']
+        check(spent(cid) == 0 and orders_count(cid) == 0, 'new customer starts at 0 spent / 0 orders')
+        pid3 = req('POST', '/api/products', {'name': 'T3', 'price': 120, 'stock': 10})[1]['id']
+        st, o3 = req('POST', '/api/orders', {'customer_id': cid, 'items': [{'product_id': pid3, 'product_name': 'T3', 'qty': 2, 'price': 120}]})
+        oid3 = o3['id']
+        check(st == 201 and spent(cid) == 240 and orders_count(cid) == 1, f'order 2x120 -> spent 0->240, orders 1 (got spent {spent(cid)}, orders {orders_count(cid)})')
+        req('PUT', f'/api/orders/{oid3}/status', {'status': 'cancelled'})
+        check(spent(cid) == 0 and orders_count(cid) == 0, f'cancel returns spend 240->0 and orders 1->0 (got spent {spent(cid)}, orders {orders_count(cid)})')
+        req('PUT', f'/api/orders/{oid3}/status', {'status': 'cancelled'})
+        check(spent(cid) == 0 and orders_count(cid) == 0, 'cancel AGAIN is idempotent -> spend stays 0 (not -240)')
+        req('PUT', f'/api/orders/{oid3}/status', {'status': 'confirmed'})
+        check(spent(cid) == 240 and orders_count(cid) == 1, f'un-cancel re-adds spend 0->240, orders ->1 (got spent {spent(cid)}, orders {orders_count(cid)})')
 
         print('\n=== missing payment confirm -> 404 (not false success) ===')
         st, _ = req('POST', '/api/payments/999999/confirm', {})

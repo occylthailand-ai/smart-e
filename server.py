@@ -709,7 +709,7 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
             return
         conn = get_db()
         c = conn.cursor()
-        row = c.execute("SELECT status FROM orders WHERE id=?", (oid,)).fetchone()
+        row = c.execute("SELECT status, customer_id, total FROM orders WHERE id=?", (oid,)).fetchone()
         if row is None:
             conn.close()
             self.send_json({'error': 'ไม่พบออเดอร์นี้'}, 404)
@@ -728,6 +728,18 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
                     c.execute("UPDATE products SET stock=stock+? WHERE id=?", (it['qty'], it['product_id']))
                 else:
                     c.execute("UPDATE products SET stock=MAX(0,stock-?) WHERE id=?", (it['qty'], it['product_id']))
+            # ยอดใช้จ่ายของลูกค้าต้องขยับสมมาตรกับสต๊อกด้วย: _create_order เพิ่ม total_orders/total_spent
+            # ให้ลูกค้าตอนสร้างออเดอร์ แต่เดิมตอนยกเลิกกลับไม่ลดคืนเลย -- ลูกค้าที่สั่งแล้วยกเลิกจึงมี
+            # ยอดใช้จ่ายค้าง (total_spent ใช้จัดอันดับลูกค้า/VIP ที่ _get_customers ORDER BY total_spent)
+            # ทำให้คนที่ไม่ได้จ่ายจริงลอยขึ้นเป็นลูกค้าท็อป กันยอดติดลบด้วย MAX(0,...) เผื่อข้อมูลเพี้ยน
+            if row['customer_id'] is not None:
+                amt = row['total'] or 0
+                if now_cancelled:
+                    c.execute("UPDATE customers SET total_orders=MAX(0,total_orders-1), total_spent=MAX(0,total_spent-?) WHERE id=?",
+                              (amt, row['customer_id']))
+                else:
+                    c.execute("UPDATE customers SET total_orders=total_orders+1, total_spent=total_spent+? WHERE id=?",
+                              (amt, row['customer_id']))
         c.execute("UPDATE orders SET status=? WHERE id=?", (new_status, oid))
         conn.commit()
         conn.close()
