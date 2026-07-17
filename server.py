@@ -597,7 +597,22 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
 
     def _delete_product(self, pid):
         conn = get_db()
-        conn.execute("DELETE FROM products WHERE id=?", (pid,))
+        c = conn.cursor()
+        # เดิมลบตรงๆ แล้วตอบ success เสมอ แม้ id ไม่มีจริง (UI ขึ้น "ลบแล้ว" ทั้งที่ไม่มีอะไรถูกลบ)
+        if c.execute("SELECT id FROM products WHERE id=?", (pid,)).fetchone() is None:
+            conn.close()
+            self.send_json({'error': 'ไม่พบสินค้านี้'}, 404)
+            return
+        # สินค้าที่ถูกอ้างใน order_items = มีประวัติการขาย SQLite ไม่ได้บังคับ FK (PRAGMA
+        # foreign_keys ปิดอยู่) การลบตรงๆ จึงทิ้ง order_items ให้กำพร้าเงียบๆ และลบยอดขายเดิม
+        # ของสินค้านี้ออกจากทุกรายงาน (top-products INNER JOIN products แล้วตัดแถวกำพร้าทิ้ง)
+        # ปฏิเสธการลบ — เจ้าของตั้งสต๊อกเป็น 0 เพื่อซ่อนจากหน้าร้านได้โดยไม่ทำลายประวัติ
+        sold = c.execute("SELECT COUNT(*) FROM order_items WHERE product_id=?", (pid,)).fetchone()[0]
+        if sold > 0:
+            conn.close()
+            self.send_json({'error': f'ลบไม่ได้: สินค้านี้มีประวัติการขาย {sold} รายการ การลบจะทำให้ยอดขายเดิมหายจากรายงาน — ตั้งสต๊อกเป็น 0 เพื่อซ่อนจากหน้าร้านแทน'}, 409)
+            return
+        c.execute("DELETE FROM products WHERE id=?", (pid,))
         conn.commit()
         conn.close()
         self.send_json({'success': True})

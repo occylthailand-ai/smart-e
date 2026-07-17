@@ -196,6 +196,22 @@ def main():
         ta = top_product_analytics('TopProd')
         check(ta is not None and ta['sold'] == 2 and ta['revenue'] == 200, f"/api/analytics also excludes cancelled: sold 2 / rev 200 (got {ta})")
 
+        print('\n=== product delete guards sales history (no orphaned order_items / lost reports) ===')
+        # SQLite has FK off, so a hard DELETE of a sold product would orphan its order_items
+        # and erase its past sales from every report. Deleting a never-sold product is fine;
+        # deleting a nonexistent one must 404 (not fake success); deleting a sold one must 409.
+        pid5 = req('POST', '/api/products', {'name': 'Disposable', 'price': 10, 'stock': 5})[1]['id']
+        st, _ = req('DELETE', f'/api/products/{pid5}')
+        check(st == 200, f'delete a never-sold product -> 200 (got {st})')
+        check(req('GET', f'/api/products/{pid5}')[0] == 404, 'the deleted product is really gone (404)')
+        st, _ = req('DELETE', '/api/products/999999')
+        check(st == 404, f'delete a nonexistent product -> 404, not fake success (got {st})')
+        pid6 = req('POST', '/api/products', {'name': 'Sold', 'price': 30, 'stock': 10})[1]['id']
+        req('POST', '/api/orders', {'items': [{'product_id': pid6, 'product_name': 'Sold', 'qty': 1, 'price': 30}]})
+        st, body = req('DELETE', f'/api/products/{pid6}')
+        check(st == 409, f'delete a product with sales history -> 409 refused (got {st})')
+        check(req('GET', f'/api/products/{pid6}')[0] == 200, 'the sold product still exists (history preserved)')
+
         print('\n=== missing payment confirm -> 404 (not false success) ===')
         st, _ = req('POST', '/api/payments/999999/confirm', {})
         check(st == 404, f'confirm nonexistent payment -> 404 (got {st})')
