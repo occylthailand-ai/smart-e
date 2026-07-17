@@ -59,6 +59,12 @@ def top_product(name):
     return next((r for r in rows if r['name'] == name), None)
 
 
+def top_product_analytics(name):
+    # same, from /api/analytics (a second top-products query with the same cancel filter)
+    rows = req('GET', '/api/analytics')[1]['top_products']
+    return next((r for r in rows if r['name'] == name), None)
+
+
 def parse_tlv(s):
     """Parse an EMVCo QR string into {tag: value}. Top-level only."""
     out = {}
@@ -186,6 +192,9 @@ def main():
         req('PUT', f"/api/orders/{oc['id']}/status", {'status': 'cancelled'})
         tp = top_product('TopProd')
         check(tp is not None and tp['sold'] == 2 and tp['revenue'] == 200, f"cancelled order excluded: still sold 2 / rev 200, not 7/700 (got {tp})")
+        # /api/analytics has its own top-products query — it must apply the same filter
+        ta = top_product_analytics('TopProd')
+        check(ta is not None and ta['sold'] == 2 and ta['revenue'] == 200, f"/api/analytics also excludes cancelled: sold 2 / rev 200 (got {ta})")
 
         print('\n=== missing payment confirm -> 404 (not false success) ===')
         st, _ = req('POST', '/api/payments/999999/confirm', {})

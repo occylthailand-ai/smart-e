@@ -1027,9 +1027,16 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
                      GROUP BY channel""")
         by_channel = [dict(r) for r in c.fetchall()]
 
+        # Join orders and exclude cancelled ones, same as every other query in this
+        # endpoint (revenue_trend / by_channel / total_revenue all filter status!='cancelled').
+        # Without the join a cancelled order still counted its qty + revenue here, inflating
+        # the best-seller list — same bug fixed in _get_dashboard_stats.
         c.execute("""SELECT p.name, p.category, SUM(oi.qty) as sold,
                             SUM(oi.qty*oi.price) as revenue
-                     FROM order_items oi JOIN products p ON p.id=oi.product_id
+                     FROM order_items oi
+                     JOIN products p ON p.id=oi.product_id
+                     JOIN orders o ON o.id=oi.order_id
+                     WHERE o.status!='cancelled'
                      GROUP BY oi.product_id ORDER BY revenue DESC LIMIT 10""")
         top_products = [dict(r) for r in c.fetchall()]
 
