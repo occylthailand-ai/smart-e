@@ -53,6 +53,12 @@ def orders_count(cid):
     return req('GET', f'/api/customers/{cid}')[1]['total_orders']
 
 
+def top_product(name):
+    # returns {'sold':..,'revenue':..} for the named product from the dashboard, or None
+    rows = req('GET', '/api/dashboard/stats')[1]['top_products']
+    return next((r for r in rows if r['name'] == name), None)
+
+
 def parse_tlv(s):
     """Parse an EMVCo QR string into {tag: value}. Top-level only."""
     out = {}
@@ -165,6 +171,21 @@ def main():
         check(spent(cid) == 0 and orders_count(cid) == 0, 'cancel AGAIN is idempotent -> spend stays 0 (not -240)')
         req('PUT', f'/api/orders/{oid3}/status', {'status': 'confirmed'})
         check(spent(cid) == 240 and orders_count(cid) == 1, f'un-cancel re-adds spend 0->240, orders ->1 (got spent {spent(cid)}, orders {orders_count(cid)})')
+
+        print('\n=== dashboard top-products excludes cancelled orders (same as every other metric) ===')
+        # today/monthly/channels/daily revenue all filter status!='cancelled'; top_products used
+        # to NOT, so a product ordered then cancelled still counted its qty+revenue and could rank
+        # as a best-seller that never actually sold. Pin the consistency.
+        pid4 = req('POST', '/api/products', {'name': 'TopProd', 'price': 100, 'stock': 100})[1]['id']
+        # one real (kept) order: qty 2 -> sold 2, revenue 200
+        req('POST', '/api/orders', {'items': [{'product_id': pid4, 'product_name': 'TopProd', 'qty': 2, 'price': 100}]})
+        tp = top_product('TopProd')
+        check(tp is not None and tp['sold'] == 2 and tp['revenue'] == 200, f"kept order counts: sold 2 / rev 200 (got {tp})")
+        # a second order that gets cancelled: qty 5 -> must NOT be counted
+        st, oc = req('POST', '/api/orders', {'items': [{'product_id': pid4, 'product_name': 'TopProd', 'qty': 5, 'price': 100}]})
+        req('PUT', f"/api/orders/{oc['id']}/status", {'status': 'cancelled'})
+        tp = top_product('TopProd')
+        check(tp is not None and tp['sold'] == 2 and tp['revenue'] == 200, f"cancelled order excluded: still sold 2 / rev 200, not 7/700 (got {tp})")
 
         print('\n=== missing payment confirm -> 404 (not false success) ===')
         st, _ = req('POST', '/api/payments/999999/confirm', {})

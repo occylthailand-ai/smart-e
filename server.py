@@ -471,10 +471,17 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         """, (month_ago,))
         daily_revenue = [dict(r) for r in c.fetchall()]
 
-        # Top products
+        # Top products — join orders and exclude cancelled ones, same as every other
+        # revenue metric above (today/monthly/channels/daily all filter status!='cancelled').
+        # Before this join a product that was ordered then cancelled still counted its qty +
+        # revenue here, so cancelled orders could push a product to the top of the best-seller
+        # list and mislead restocking/marketing decisions.
         c.execute("""
             SELECT p.name, SUM(oi.qty) as sold, SUM(oi.qty*oi.price) as revenue
-            FROM order_items oi JOIN products p ON p.id=oi.product_id
+            FROM order_items oi
+            JOIN products p ON p.id=oi.product_id
+            JOIN orders o ON o.id=oi.order_id
+            WHERE o.status!='cancelled'
             GROUP BY oi.product_id ORDER BY revenue DESC LIMIT 5
         """)
         top_products = [dict(r) for r in c.fetchall()]
