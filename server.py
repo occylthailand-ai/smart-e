@@ -898,15 +898,25 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         # "สำเร็จ" ทั้งที่ไม่มีอะไรเกิดขึ้นจริง ตรวจว่ามีรายการชำระอยู่จริงก่อน ไม่งั้นตอบ 404
         conn = get_db()
         c = conn.cursor()
-        row = c.execute("SELECT id FROM payments WHERE id=?", (pay_id,)).fetchone()
+        row = c.execute("SELECT id, order_id FROM payments WHERE id=?", (pay_id,)).fetchone()
         if row is None:
             conn.close()
             self.send_json({'error': 'ไม่พบรายการชำระเงินนี้'}, 404)
             return
         c.execute("UPDATE payments SET status='paid' WHERE id=?", (pay_id,))
+        # เดิมยืนยันการชำระอัปเดตแค่แถว payments -- ออเดอร์ที่ผูกอยู่ค้างสถานะ 'pending' ตลอดไป
+        # POS จึงแสดงว่า "จ่ายแล้ว" แต่ออเดอร์ยังค้างคิว และ pending_orders บน dashboard ค้างเกิน
+        # จริง เลื่อนออเดอร์ pending -> paid เมื่อยืนยันการชำระ เฉพาะเมื่อยังเป็น 'pending' เท่านั้น
+        # (WHERE status='pending') เพื่อไม่ทับสถานะที่เดินหน้าไปแล้ว (shipped/delivered) หรือปลุก
+        # ออเดอร์ที่ยกเลิกไปแล้วกลับมา ไม่กระทบสต๊อก/ยอดใช้จ่ายลูกค้าเพราะ side effect เหล่านั้นผูก
+        # กับ transition 'cancelled' ใน _update_order_status เท่านั้น ('paid' ไม่แตะสต๊อก)
+        order_updated = False
+        if row['order_id'] is not None:
+            c.execute("UPDATE orders SET status='paid' WHERE id=? AND status='pending'", (row['order_id'],))
+            order_updated = c.rowcount > 0
         conn.commit()
         conn.close()
-        self.send_json({'success': True, 'id': row['id'], 'status': 'paid'})
+        self.send_json({'success': True, 'id': row['id'], 'status': 'paid', 'order_updated': order_updated})
 
     # ──────────────────────────────────────────
     # LINE WEBHOOK

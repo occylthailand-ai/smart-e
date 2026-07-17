@@ -216,6 +216,33 @@ def main():
         st, _ = req('POST', '/api/payments/999999/confirm', {})
         check(st == 404, f'confirm nonexistent payment -> 404 (got {st})')
 
+        print('\n=== confirming a payment advances its linked order pending -> paid ===')
+        # A POS operator creates an order, shows a PromptPay QR for it, then confirms once the
+        # customer pays. Before this, confirm only flipped the payments row and the order stayed
+        # 'pending' forever -- so the order sat in the queue and dashboard pending_orders was
+        # inflated even though it was paid. Confirming should carry the linked order pending->paid.
+        def order_status(target_id):
+            _st, resp = req('GET', '/api/orders')
+            for o in (resp.get('orders', []) if isinstance(resp, dict) else []):
+                if o.get('id') == target_id:
+                    return o.get('status')
+            return None
+        pidP = req('POST', '/api/products', {'name': 'PayFlow', 'price': 90, 'stock': 5})[1]['id']
+        oidP = req('POST', '/api/orders', {'items': [{'product_id': pidP, 'product_name': 'PayFlow', 'qty': 1, 'price': 90}]})[1]['id']
+        check(order_status(oidP) == 'pending', 'new order starts pending')
+        payP = req('POST', '/api/payments/qr', {'phone': '0812345678', 'amount': 90, 'order_id': oidP})[1]['id']
+        st, cbody = req('POST', '/api/payments/confirm', {'id': payP})
+        check(st == 200 and cbody.get('order_updated') is True, f'confirm reports order_updated=True (got {st}, {cbody.get("order_updated")})')
+        check(order_status(oidP) == 'paid', f'linked order advanced pending -> paid (got {order_status(oidP)})')
+        # a QR with no order_id must still confirm fine and simply not touch any order
+        payNo = req('POST', '/api/payments/qr', {'phone': '0812345678', 'amount': 50})[1]['id']
+        st, cbody2 = req('POST', '/api/payments/confirm', {'id': payNo})
+        check(st == 200 and cbody2.get('order_updated') is False, f'orderless payment confirms with order_updated=False (got {st}, {cbody2.get("order_updated")})')
+        # confirming again must NOT regress an order that already moved past pending
+        req('PUT', f'/api/orders/{oidP}/status', {'status': 'shipped'})
+        req('POST', '/api/payments/confirm', {'id': payP})
+        check(order_status(oidP) == 'shipped', 'a re-confirm does not drag a shipped order back to paid')
+
         print('\n=== PromptPay QR payload (EMVCo structure + CRC + static/dynamic method) ===')
         # The QR is what a customer actually scans to pay. If the CRC-16 or TLV structure is
         # wrong, every banking app rejects it. And the Point of Initiation Method (tag 01) must
