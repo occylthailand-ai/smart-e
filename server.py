@@ -951,6 +951,18 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         message = body.get('message', '')
         channel_token = body.get('channel_token', '')
 
+        # ตรวจข้อความก่อนยิง/บันทึก -- เดิมไม่ตรวจเลย: ข้อความว่าง (หรือมีแต่ช่องว่าง) กับข้อความ
+        # ยาวเกิน 5000 ตัวอักษร ล้วนถูก LINE API ปฏิเสธด้วย HTTP 400 อยู่แล้ว แต่โค้ดกลับยิง API
+        # ที่รู้อยู่แล้วว่าล้มเหลว และในโหมด simulate (ไม่มี token) ยัง INSERT log การ broadcast
+        # ที่ว่างเปล่าแล้วตอบ success -- ทำให้ประวัติ/สถิติมีรายการ broadcast ปลอมที่ไม่เคยส่งอะไร
+        # ตรวจก่อนตามแนวเดียวกับ _create_order/_create_product แล้วตอบ 400 ที่อ่านได้
+        if not (message or '').strip():
+            self.send_json({'error': 'message ต้องไม่ว่าง'}, 400)
+            return
+        if len(message) > 5000:
+            self.send_json({'error': 'message ยาวเกิน 5000 ตัวอักษร (เกินลิมิตข้อความของ LINE)'}, 400)
+            return
+
         # Log broadcast attempt
         conn = get_db()
         c = conn.cursor()

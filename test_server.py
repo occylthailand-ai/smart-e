@@ -243,6 +243,21 @@ def main():
         req('POST', '/api/payments/confirm', {'id': payP})
         check(order_status(oidP) == 'shipped', 'a re-confirm does not drag a shipped order back to paid')
 
+        print('\n=== LINE broadcast validates the message before sending/logging ===')
+        # A broadcast is a real outbound action. An empty/whitespace message and a >5000-char
+        # message are both rejected by LINE's API (HTTP 400), so firing them is a guaranteed-failed
+        # call -- and in simulate mode (no token) the old code still logged a blank broadcast as a
+        # success. Guard before the send/log, like every other _create_* handler.
+        st, _ = req('POST', '/api/line/broadcast', {'message': ''})
+        check(st == 400, f'empty broadcast message -> 400 (got {st})')
+        st, _ = req('POST', '/api/line/broadcast', {'message': '   \n  '})
+        check(st == 400, f'whitespace-only broadcast message -> 400 (got {st})')
+        st, _ = req('POST', '/api/line/broadcast', {'message': 'x' * 5001})
+        check(st == 400, f'over-5000-char broadcast message -> 400 (got {st})')
+        st, b = req('POST', '/api/line/broadcast', {'message': 'โปรโมชั่นวันนี้ ลด 20%'})
+        check(st == 200 and b.get('success') is True, f'a valid broadcast still succeeds (got {st})')
+        check(str(b.get('status', '')).startswith('simulated'), 'no real token -> simulated (not an actual send)')
+
         print('\n=== PromptPay QR payload (EMVCo structure + CRC + static/dynamic method) ===')
         # The QR is what a customer actually scans to pay. If the CRC-16 or TLV structure is
         # wrong, every banking app rejects it. And the Point of Initiation Method (tag 01) must
