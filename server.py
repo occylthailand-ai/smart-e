@@ -807,12 +807,26 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         customer['messages'] = messages
         self.send_json(customer)
 
+    # อีเมลไม่บังคับ (ลูกค้าหน้าร้าน/LINE อาจไม่มี) แต่ถ้าใส่มาต้องเป็นรูปแบบที่ใช้ได้จริง
+    EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
     def _create_customer(self, body):
+        # ตรวจก่อนบันทึกตามแนวเดียวกับ _create_order/_create_product -- เดิม _create_customer
+        # ยิง INSERT ด้วยชื่อว่าง ('') ได้ทันที (คอลัมน์ name เป็น NOT NULL ซึ่งกันแค่ NULL ไม่กัน
+        # empty string) → มีลูกค้า "ไม่มีชื่อ" โผล่ในรายการ/นับใน total_customers ติดต่อไม่ได้
+        name = (body.get('name') or '').strip()
+        if not name:
+            self.send_json({'error': 'name ต้องไม่ว่าง'}, 400)
+            return
+        email = (body.get('email') or '').strip()
+        if email and not self.EMAIL_RE.match(email):
+            self.send_json({'error': 'อีเมลไม่ถูกต้อง'}, 400)
+            return
         conn = get_db()
         c = conn.cursor()
         c.execute("""INSERT INTO customers (name,email,phone,line_user_id,line_display_name,tag)
                      VALUES (?,?,?,?,?,?)""",
-                  (body.get('name',''), body.get('email',''), body.get('phone',''),
+                  (name, email, body.get('phone',''),
                    body.get('line_user_id',''), body.get('line_display_name',''),
                    body.get('tag','ทั่วไป')))
         cid = c.lastrowid
@@ -822,6 +836,15 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         self.send_json({'id': cid, 'success': True}, 201)
 
     def _update_customer(self, cid, body):
+        # กันการ "อัปเดตทับ" ชื่อให้ว่าง หรือใส่อีเมลผิดรูปแบบ (validate เฉพาะฟิลด์ที่ส่งมาแก้)
+        if 'name' in body and not (body.get('name') or '').strip():
+            self.send_json({'error': 'name ต้องไม่ว่าง'}, 400)
+            return
+        if 'email' in body:
+            em = (body.get('email') or '').strip()
+            if em and not self.EMAIL_RE.match(em):
+                self.send_json({'error': 'อีเมลไม่ถูกต้อง'}, 400)
+                return
         conn = get_db()
         fields = []
         params = []

@@ -258,6 +258,28 @@ def main():
         check(st == 200 and b.get('success') is True, f'a valid broadcast still succeeds (got {st})')
         check(str(b.get('status', '')).startswith('simulated'), 'no real token -> simulated (not an actual send)')
 
+        print('\n=== customer input validation (name required; email format if given) ===')
+        # customers.name is NOT NULL but that only blocks NULL, not '' — so a blank-name
+        # customer used to insert fine and pollute the list / total_customers. Validate on
+        # create + update like every other _create_/_update_ handler.
+        st, _ = req('POST', '/api/customers', {'name': ''})
+        check(st == 400, f'create customer with empty name -> 400 (got {st})')
+        st, _ = req('POST', '/api/customers', {'name': '   '})
+        check(st == 400, f'create customer with whitespace-only name -> 400 (got {st})')
+        st, _ = req('POST', '/api/customers', {'name': 'ลูกค้า A', 'email': 'not-an-email'})
+        check(st == 400, f'create customer with a malformed email -> 400 (got {st})')
+        st, cok = req('POST', '/api/customers', {'name': 'ลูกค้า B', 'email': 'b@shop.co'})
+        check(st == 201 and cok.get('id'), f'a valid customer (name + good email) -> 201 (got {st})')
+        cvid = cok['id']
+        st, _ = req('POST', '/api/customers', {'name': 'ลูกค้า C'})
+        check(st == 201, f'email is optional -> name-only customer still creates (got {st})')
+        st, _ = req('PUT', f'/api/customers/{cvid}', {'name': ''})
+        check(st == 400, f'update that blanks the name -> 400 (got {st})')
+        st, _ = req('PUT', f'/api/customers/{cvid}', {'email': 'bad@@x'})
+        check(st == 400, f'update with a malformed email -> 400 (got {st})')
+        st, _ = req('PUT', f'/api/customers/{cvid}', {'tag': 'VIP'})
+        check(st == 200, f'a valid partial update (tag only) still works (got {st})')
+
         print('\n=== PromptPay QR payload (EMVCo structure + CRC + static/dynamic method) ===')
         # The QR is what a customer actually scans to pay. If the CRC-16 or TLV structure is
         # wrong, every banking app rejects it. And the Point of Initiation Method (tag 01) must
