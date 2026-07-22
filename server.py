@@ -906,7 +906,13 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         self.send_json({'payments': payments, 'total_paid': total_paid, 'pending_count': pending_count})
 
     def _create_qr(self, body):
-        phone = body.get('phone', '0800000000')
+        # เดิม phone default เป็น '0800000000' -- ถ้า caller ไม่ส่ง phone มา QR จะถูกสร้างชี้ไปเบอร์
+        # ปลอมนี้แบบเงียบๆ (เป็น QR ที่ valid แต่เงินลูกค้าเข้าเบอร์อื่น ไม่ใช่ร้าน) frontend มาร์ค
+        # required อยู่แล้วแต่ backend ต้องกันเอง -- ต้องมีพร้อมเพย์จริง (มือถือ 10 / บัตร 13 / e-wallet 15)
+        phone = (body.get('phone') or '').strip()
+        if len(re.sub(r'\D', '', phone)) < 10:
+            self.send_json({'error': 'ต้องระบุพร้อมเพย์ของร้าน (เบอร์มือถือ เลขบัตรประชาชน หรือ e-wallet) ก่อนสร้าง QR'}, 400)
+            return
         try:
             amount = float(body.get('amount', 0))
         except (TypeError, ValueError):

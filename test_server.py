@@ -378,6 +378,18 @@ def main():
         # static/reusable when the payer fills in the amount (the amount=0 case _create_qr
         # supports). It was hardcoded "12" for both, so a reusable "fill-in-amount" QR was
         # advertised as single-use (some apps blackhole a reused "12"). Assert both cases here.
+        #
+        # First: a QR MUST carry a real shop PromptPay. _create_qr used to default a missing phone
+        # to '0800000000' — a valid-looking QR that routes the customer's money to a stranger, not
+        # the shop. A missing/blank/too-short phone must be rejected, not silently defaulted.
+        st, _ = req('POST', '/api/payments/qr', {'amount': 150})  # no phone at all
+        check(st == 400, f'QR with no phone -> 400 (not a QR to a default stranger number) (got {st})')
+        st, _ = req('POST', '/api/payments/qr', {'phone': '', 'amount': 150})
+        check(st == 400, f'QR with a blank phone -> 400 (got {st})')
+        st, _ = req('POST', '/api/payments/qr', {'phone': 'abc', 'amount': 150})
+        check(st == 400, f'QR with a non-numeric phone -> 400 (got {st})')
+        st, _ = req('POST', '/api/payments/qr', {'phone': '081234', 'amount': 150})
+        check(st == 400, f'QR with a too-short phone -> 400 (got {st})')
         st, qr = req('POST', '/api/payments/qr', {'phone': '0812345678', 'amount': 150})
         check(st == 200 and 'payload' in qr, f'qr create with amount -> 200 + payload (got {st})')
         d = parse_tlv(qr['payload'])
