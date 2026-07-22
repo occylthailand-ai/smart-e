@@ -585,7 +585,11 @@ function fillCustomerName(sel) {
 function addOrderItem() {
   const sel = document.getElementById('add-product-sel');
   const opt = sel.options[sel.selectedIndex];
-  const qty = parseInt(document.getElementById('add-qty').value) || 1;
+  // ถ้ายังไม่มีสินค้าในระบบ select จะว่าง (ไม่มี <option>) -> selectedIndex เป็น -1 ->
+  // sel.options[-1] เป็น undefined -> opt.dataset ทำให้ปุ่ม "เพิ่ม" โยน TypeError เงียบๆ
+  // (แคชเชียร์กดแล้วไม่มีอะไรเกิด ไม่มีคำเตือน) แจ้งเตือนแทนการ crash
+  if (!opt || !sel.value) { toast('ยังไม่มีสินค้าให้เลือก — เพิ่มสินค้าในเมนู "สินค้า" ก่อน', 'error'); return; }
+  const qty = Math.max(1, parseInt(document.getElementById('add-qty').value, 10) || 1);
   const item = {product_id: parseInt(sel.value), product_name: opt.dataset.name, price: parseFloat(opt.dataset.price), qty};
   const existing = window._orderItems.findIndex(i => i.product_id === item.product_id);
   if(existing >= 0) window._orderItems[existing].qty += qty;
