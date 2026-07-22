@@ -552,17 +552,28 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({'error': 'Not found'}, 404)
 
     def _create_product(self, body):
+        # ตรวจก่อนบันทึกตามแนวเดียวกับ _create_order (price>=0) และ _create_customer (name ไม่ว่าง)
+        # -- เดิมรับ name ว่าง/price ติดลบ/stock ติดลบ ได้เลย: สินค้าไม่มีชื่อโผล่ในแคตตาล็อก, และ
+        # price ติดลบทำให้ total ออเดอร์ติดลบเมื่อแคชเชียร์เพิ่มสินค้านั้น (POS ดึง data-price จาก
+        # สินค้า) → รายได้/ยอดใช้จ่ายลูกค้าเพี้ยน
+        name = (body.get('name') or '').strip()
+        if not name:
+            self.send_json({'error': 'name ต้องไม่ว่าง'}, 400)
+            return
         try:
             price = float(body.get('price', 0))
             stock = int(body.get('stock', 0))
         except (TypeError, ValueError):
             self.send_json({'error': 'price ต้องเป็นตัวเลข และ stock ต้องเป็นจำนวนเต็ม'}, 400)
             return
+        if price < 0 or stock < 0:
+            self.send_json({'error': 'price และ stock ต้องไม่ติดลบ'}, 400)
+            return
         conn = get_db()
         c = conn.cursor()
         c.execute("""INSERT INTO products (name,description,price,stock,category,image_url)
                      VALUES (?,?,?,?,?,?)""",
-                  (body.get('name',''), body.get('description',''),
+                  (name, body.get('description',''),
                    price, stock,
                    body.get('category','ทั่วไป'), body.get('image_url','')))
         pid = c.lastrowid
@@ -576,6 +587,13 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         # POST /api/products ตรวจ price/stock เป็นตัวเลขแล้ว แต่ PUT เดิมรับอะไรก็ได้ --
         # SQLite เก็บ string "abc" ลงคอลัมน์ price ได้เฉยๆ แล้วพังปลายทาง (สต๊อกจริงถูก
         # เขียนทับเป็น 0 ตอน order decrement เพราะ 'xyz' ถูก coerce เป็น 0)
+        if 'name' in body:
+            # แก้ชื่อเป็นค่าว่างไม่ได้ (เหมือน _create_product/_create_customer) -- เก็บค่าที่ strip แล้ว
+            name = (body.get('name') or '').strip()
+            if not name:
+                self.send_json({'error': 'name ต้องไม่ว่าง'}, 400)
+                return
+            body['name'] = name
         if 'price' in body or 'stock' in body:
             try:
                 if 'price' in body:
@@ -584,6 +602,9 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
                     body['stock'] = int(body['stock'])
             except (TypeError, ValueError):
                 self.send_json({'error': 'price ต้องเป็นตัวเลข และ stock ต้องเป็นจำนวนเต็ม'}, 400)
+                return
+            if ('price' in body and body['price'] < 0) or ('stock' in body and body['stock'] < 0):
+                self.send_json({'error': 'price และ stock ต้องไม่ติดลบ'}, 400)
                 return
         conn = get_db()
         c = conn.cursor()

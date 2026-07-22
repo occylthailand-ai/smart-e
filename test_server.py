@@ -280,6 +280,34 @@ def main():
         st, _ = req('PUT', f'/api/customers/{cvid}', {'tag': 'VIP'})
         check(st == 200, f'a valid partial update (tag only) still works (got {st})')
 
+        print('\n=== product input validation (name required; price/stock not negative) ===')
+        # _create_order already rejects price<0/qty<1 and _create_customer rejects an empty
+        # name, but _create_product/_update_product only checked "is it a number" -- so a
+        # nameless product or a NEGATIVE price/stock inserted fine. A negative price is a real
+        # money bug: the POS order form fills its line price from the product's data-price, so
+        # adding that product makes the order total (and reported revenue / customer spend) go
+        # negative. Pin the same validation the other create handlers already have.
+        st, _ = req('POST', '/api/products', {'name': '', 'price': 100, 'stock': 5})
+        check(st == 400, f'create product with empty name -> 400 (got {st})')
+        st, _ = req('POST', '/api/products', {'name': '   ', 'price': 100, 'stock': 5})
+        check(st == 400, f'create product with whitespace-only name -> 400 (got {st})')
+        st, _ = req('POST', '/api/products', {'name': 'ของถูก', 'price': -50, 'stock': 5})
+        check(st == 400, f'create product with negative price -> 400 (got {st})')
+        st, _ = req('POST', '/api/products', {'name': 'ของถูก', 'price': 50, 'stock': -3})
+        check(st == 400, f'create product with negative stock -> 400 (got {st})')
+        st, pok = req('POST', '/api/products', {'name': '  สินค้าดี  ', 'price': 50, 'stock': 3})
+        check(st == 201 and pok.get('name') == 'สินค้าดี', f'valid product creates and name is trimmed (got {st}, name={pok.get("name")!r})')
+        vpid = pok['id']
+        st, _ = req('PUT', f'/api/products/{vpid}', {'name': ''})
+        check(st == 400, f'update that blanks the name -> 400 (got {st})')
+        st, _ = req('PUT', f'/api/products/{vpid}', {'price': -1})
+        check(st == 400, f'update to a negative price -> 400 (got {st})')
+        st, _ = req('PUT', f'/api/products/{vpid}', {'stock': -1})
+        check(st == 400, f'update to a negative stock -> 400 (got {st})')
+        check(stock(vpid) == 3, 'stock untouched after the rejected negative-stock update')
+        st, _ = req('PUT', f'/api/products/{vpid}', {'price': 0, 'stock': 0})
+        check(st == 200, f'price 0 / stock 0 is allowed (free sample / out of stock) (got {st})')
+
         print('\n=== PromptPay QR payload (EMVCo structure + CRC + static/dynamic method) ===')
         # The QR is what a customer actually scans to pay. If the CRC-16 or TLV structure is
         # wrong, every banking app rejects it. And the Point of Initiation Method (tag 01) must
