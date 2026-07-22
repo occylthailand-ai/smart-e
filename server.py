@@ -252,9 +252,16 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         if length:
             self._raw_body = self.rfile.read(length)
             try:
-                return json.loads(self._raw_body.decode('utf-8'))
+                parsed = json.loads(self._raw_body.decode('utf-8'))
             except (json.JSONDecodeError, UnicodeDecodeError):
                 return None
+            # เดิมคืนค่า JSON อะไรก็ได้ที่ parse ผ่าน -- แต่ body ที่ valid แต่ไม่ใช่ object
+            # (เช่น [] , "x" , 123) จะทำให้ handler ที่เรียก body.get(...) โยน AttributeError
+            # แล้ว _guard แปลง client error เป็น 500 ทุก endpoint คาดหวัง JSON object เสมอ
+            # จึงเก็บกวาดตรงนี้ด้วย sentinel None เดียวกับที่ dispatcher map เป็น 400 อยู่แล้ว
+            if not isinstance(parsed, dict):
+                return None
+            return parsed
         self._raw_body = b''
         return {}
 

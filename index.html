@@ -289,7 +289,9 @@ function toast(msg, type='info') {
   const el = document.createElement('div');
   el.className = `toast-item ${type}`;
   const icons = {success:'✅',error:'❌',info:'ℹ️'};
-  el.innerHTML = `<span>${icons[type]}</span><span>${msg}</span>`;
+  // msg อาจมาจาก data.error ของเซิร์ฟเวอร์ ซึ่งบางข้อความ interpolate ค่าจาก DB (เช่น ชื่อสินค้า)
+  // การยัดลง innerHTML ตรงๆ จึงเป็นช่อง XSS -- escape ก่อนเสมอ (ไอคอนเป็นค่าคงที่ ปลอดภัยอยู่แล้ว)
+  el.innerHTML = `<span>${icons[type]}</span><span>${escapeHtml(msg)}</span>`;
   document.getElementById('toast').appendChild(el);
   setTimeout(() => el.remove(), 3500);
 }

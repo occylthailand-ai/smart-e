@@ -337,6 +337,22 @@ def main():
             check(st == 200 and q['payload'][-4:] == crc16_ccitt(q['payload'][:-4]),
                   f'{label}: CRC-16 valid')
 
+        print('\n=== non-object JSON body is a clean 400, not a 500 ===')
+        # read_body() used to return whatever parsed (list/str/number), so a valid-but-non-object
+        # body like [] or "x" slipped past the `is None` guard and later hit body.get(...) ->
+        # AttributeError -> _guard turned a client mistake into a 500. Every endpoint expects a
+        # JSON object; assert the sentinel now yields 400 for both POST and PUT.
+        for raw_body, label in ([], 'a JSON array []'), ('x', 'a JSON string "x"'), (5, 'a JSON number'):
+            st, _ = req('POST', '/api/customers', raw_body)
+            check(st == 400, f'POST with {label} -> 400 (got {st})')
+        st, _ = req('PUT', '/api/products/1', [])
+        check(st == 400, f'PUT with a JSON array [] -> 400 (got {st})')
+        # a normal object body is unaffected (still reaches validation, not a blanket 400)
+        st, _ = req('POST', '/api/customers', {'name': ''})
+        check(st == 400, 'an object body still reaches per-field validation (empty name -> 400)')
+        st, ok = req('POST', '/api/customers', {'name': 'ลูกค้า สมชาย'})
+        check(st == 201 and ok.get('id'), f'a valid object body still creates normally (got {st})')
+
         print(f'\n=== RESULT: {passed} passed, {failed} failed ===')
         return 1 if failed else 0
     finally:
