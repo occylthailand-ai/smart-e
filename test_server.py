@@ -115,7 +115,14 @@ def crc16_ccitt(payload):
 
 def main():
     dbfd, dbpath = tempfile.mkstemp(suffix='.db'); os.close(dbfd); os.remove(dbpath)
-    env = {**os.environ, 'SMART_E_DB': dbpath, 'PORT': str(PORT), 'ADMIN_KEY': KEY, 'LINE_CHANNEL_SECRET': LINE_SECRET}
+    # Grab a port, then release it — nothing listens there, so a broadcast that reaches the
+    # LINE API (only when a >20-char token is supplied) gets a deterministic ConnectionRefused.
+    # This lets the with-token send-FAILURE path be tested offline; simulate mode (no token)
+    # never touches the network, so every other test is unaffected.
+    import socket
+    _s = socket.socket(); _s.bind(('127.0.0.1', 0)); CLOSED_PORT = _s.getsockname()[1]; _s.close()
+    env = {**os.environ, 'SMART_E_DB': dbpath, 'PORT': str(PORT), 'ADMIN_KEY': KEY,
+           'LINE_CHANNEL_SECRET': LINE_SECRET, 'LINE_API_BASE': f'http://127.0.0.1:{CLOSED_PORT}'}
     proc = subprocess.Popen([sys.executable, os.path.join(HERE, 'server.py')],
                             env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -281,6 +288,22 @@ def main():
         st, b = req('POST', '/api/line/broadcast', {'message': 'โปรโมชั่นวันนี้ ลด 20%'})
         check(st == 200 and b.get('success') is True, f'a valid broadcast still succeeds (got {st})')
         check(str(b.get('status', '')).startswith('simulated'), 'no real token -> simulated (not an actual send)')
+
+        # A real send (token > 20 chars) that FAILS must NOT be logged as a delivered broadcast,
+        # nor report success. Old code logged the 'out' row + returned success:True even when the
+        # LINE API call raised, so the owner saw "sent to N" and a history entry for a promo that
+        # never went out. LINE_API_BASE points at a closed port (see env), so the call is a
+        # deterministic ConnectionRefused. The message must be absent from the broadcast log.
+        def broadcast_logged(msg):
+            rows = req('GET', '/api/line/messages')[1]['messages']
+            return any(r.get('line_user_id') == 'BROADCAST' and r.get('message') == msg for r in rows)
+        FAIL_MSG = 'ยิงจริงแต่ LINE ล่ม — ห้ามบันทึกว่าเคยส่ง'
+        st, b = req('POST', '/api/line/broadcast', {'message': FAIL_MSG, 'channel_token': 'x' * 40})
+        check(st == 502, f'real send that fails -> 502 (got {st})')
+        check(b.get('success') is not True, f'a failed real send does NOT report success:True (got {b.get("success")})')
+        check(not broadcast_logged(FAIL_MSG), 'a failed real broadcast is NOT written to the message log (no phantom "sent" history)')
+        # sanity: the simulate-mode message from just above WAS logged (the fix only drops failures)
+        check(broadcast_logged('โปรโมชั่นวันนี้ ลด 20%'), 'a simulated/successful broadcast is still logged (fix is scoped to send-failures)')
 
         print('\n=== customer input validation (name required; email format if given) ===')
         # customers.name is NOT NULL but that only blocks NULL, not '' — so a blank-name

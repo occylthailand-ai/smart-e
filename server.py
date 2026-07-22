@@ -41,6 +41,10 @@ ADMIN_KEY = os.environ.get('ADMIN_KEY', '')
 # not the admin key. It previously had no verification at all: anyone could
 # POST fake "follow"/"message" events and inject fake customers/messages.
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET', '')
+# Base URL of the LINE Messaging API. Overridable so a test can point the broadcast
+# call at a closed/local port and deterministically exercise the send-failure path
+# (default is the real endpoint; production is unchanged).
+LINE_API_BASE = os.environ.get('LINE_API_BASE', 'https://api.line.me')
 
 # ─────────────────────────────────────────────
 # DATABASE SETUP
@@ -1037,7 +1041,7 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
                     "messages": [{"type": "text", "text": message}]
                 }).encode('utf-8')
                 req = urllib.request.Request(
-                    'https://api.line.me/v2/bot/message/broadcast',
+                    f'{LINE_API_BASE}/v2/bot/message/broadcast',
                     data=req_data,
                     headers={
                         'Content-Type': 'application/json',
@@ -1047,10 +1051,18 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
                 urllib.request.urlopen(req, timeout=10)
                 status = 'sent'
             except Exception as e:
-                status = f'error: {str(e)}'
+                # เดิม: ยิง API ล้มเหลว (token ผิด/เน็ตล่ม/LINE ตอบ error) แต่ยัง INSERT log broadcast
+                # เป็น 'out' แล้วตอบ success:True -- เจ้าของร้านเห็นว่า "ส่งโปรโมชั่นถึง N คนแล้ว" +
+                # มีประวัติ ทั้งที่ลูกค้าไม่ได้รับอะไรเลย ตอนนี้: ไม่บันทึก log ที่ไม่ได้ส่งจริง และ
+                # ตอบ 502 ที่อ่านได้ (ต่างจาก simulate mode ที่ตั้งใจ log เพราะไม่มี token = โหมดทดสอบ)
+                conn.close()
+                self.send_json({'error': f'ส่ง broadcast ไม่สำเร็จ: {str(e)}', 'success': False}, 502)
+                return
         else:
             status = 'simulated (ไม่มี Channel Token จริง)'
-        # Save broadcast log
+        # Save broadcast log — reached only when the message was actually sent ('sent') or when
+        # running without a token (simulate mode). A genuine send-failure returns above and is
+        # NOT logged, so the broadcast history can't show a promo that never went out.
         c.execute("""INSERT INTO line_messages (customer_id,line_user_id,message,direction)
                      VALUES (NULL,'BROADCAST',?,?)""", (message, 'out'))
         conn.commit()
