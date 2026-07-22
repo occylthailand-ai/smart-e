@@ -980,6 +980,11 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         for event in events:
             user_id = event.get('source', {}).get('userId', '')
             event_type = event.get('type', '')
+            # บาง event (group/room หรือ event ที่ไม่มี user source) ไม่มี userId -- เดิม follow ที่ไม่มี
+            # userId จะสร้างลูกค้าขยะ "LINE User " (ชื่อ/line_user_id ว่าง) และ message ก็ log แถวขยะ
+            # ที่ผูกกับใครไม่ได้ ข้ามไปถ้าไม่มี userId เพราะทั้งสองเคสต้องใช้ userId ในการอ้างลูกค้า
+            if not user_id:
+                continue
             if event_type == 'follow':
                 # Add new customer from LINE
                 c.execute("SELECT id FROM customers WHERE line_user_id=?", (user_id,))

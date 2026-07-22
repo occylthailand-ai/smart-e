@@ -6,11 +6,12 @@ repeatable so they can't silently regress). Pure stdlib, no test framework.
 
 Run:  python3 test_server.py      (exit 0 = pass, 1 = fail)
 """
-import json, os, subprocess, sys, tempfile, time, urllib.error, urllib.request
+import base64, hashlib, hmac, json, os, subprocess, sys, tempfile, time, urllib.error, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORT = int(os.environ.get('TEST_PORT', '8987'))
 KEY = 'test-admin-key'
+LINE_SECRET = 'test-line-channel-secret'
 BASE = f'http://127.0.0.1:{PORT}'
 passed = failed = 0
 
@@ -39,6 +40,29 @@ def req(method, path, body=None, key=KEY):
             return e.code, json.loads(raw)
         except Exception:
             return e.code, raw
+
+
+def line_webhook(events, secret=LINE_SECRET):
+    # POST /api/webhook/line the way LINE does: raw JSON body + an X-Line-Signature
+    # header = base64(HMAC-SHA256(channel_secret, raw_body)). No X-Admin-Key.
+    raw = json.dumps({'events': events}).encode()
+    sig = base64.b64encode(hmac.new(secret.encode(), raw, hashlib.sha256).digest()).decode()
+    r = urllib.request.Request(BASE + '/api/webhook/line', data=raw, method='POST')
+    r.add_header('Content-Type', 'application/json')
+    r.add_header('X-Line-Signature', sig)
+    try:
+        with urllib.request.urlopen(r, timeout=5) as resp:
+            return resp.status, json.loads(resp.read().decode() or 'null')
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode()
+
+
+def customer_by_line_id(line_user_id):
+    # find a customer row by its line_user_id via the admin list
+    for cu in req('GET', '/api/customers')[1]['customers']:
+        if cu.get('line_user_id') == line_user_id:
+            return cu
+    return None
 
 
 def stock(pid):
@@ -91,7 +115,7 @@ def crc16_ccitt(payload):
 
 def main():
     dbfd, dbpath = tempfile.mkstemp(suffix='.db'); os.close(dbfd); os.remove(dbpath)
-    env = {**os.environ, 'SMART_E_DB': dbpath, 'PORT': str(PORT), 'ADMIN_KEY': KEY}
+    env = {**os.environ, 'SMART_E_DB': dbpath, 'PORT': str(PORT), 'ADMIN_KEY': KEY, 'LINE_CHANNEL_SECRET': LINE_SECRET}
     proc = subprocess.Popen([sys.executable, os.path.join(HERE, 'server.py')],
                             env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -307,6 +331,45 @@ def main():
         check(stock(vpid) == 3, 'stock untouched after the rejected negative-stock update')
         st, _ = req('PUT', f'/api/products/{vpid}', {'price': 0, 'stock': 0})
         check(st == 200, f'price 0 / stock 0 is allowed (free sample / out of stock) (got {st})')
+
+        print('\n=== LINE webhook (signature gate + no junk customers from userId-less events) ===')
+        # The webhook is what LINE calls on follow/message. It must (a) reject an unsigned/bad
+        # signature, and (b) never insert a junk "LINE User " customer (blank name + blank
+        # line_user_id) from an event with no source.userId — group/room and some system events
+        # arrive without a userId, and a blank-id customer both pollutes the CRM and makes every
+        # later userId-less event dedupe onto that one ghost row.
+        st, _ = req('POST', '/api/webhook/line', {'events': []})  # no signature, via normal req()
+        check(st == 401, f'webhook without X-Line-Signature -> 401 (got {st})')
+        bad = urllib.request.Request(BASE + '/api/webhook/line', data=b'{"events":[]}', method='POST')
+        bad.add_header('X-Line-Signature', 'not-a-valid-signature')
+        try:
+            urllib.request.urlopen(bad, timeout=5); badcode = 200
+        except urllib.error.HTTPError as e:
+            badcode = e.code
+        check(badcode == 401, f'webhook with a wrong signature -> 401 (got {badcode})')
+
+        st, _ = line_webhook([{'type': 'follow', 'source': {'type': 'user', 'userId': 'U_real_001'}}])
+        check(st == 200, f'a properly signed follow -> 200 (got {st})')
+        real = customer_by_line_id('U_real_001')
+        check(real is not None and real['tag'] == 'LINE', 'follow with a real userId creates a LINE customer')
+
+        before = req('GET', '/api/customers')[1]['total']
+        st, _ = line_webhook([{'type': 'follow', 'source': {'type': 'group', 'groupId': 'G1'}}])  # no userId
+        check(st == 200, f'a userId-less follow still returns 200 (got {st})')
+        after = req('GET', '/api/customers')[1]['total']
+        check(after == before, f'userId-less follow creates NO customer (before {before}, after {after})')
+        # and specifically no junk "LINE User " row (blank display name) got inserted
+        ghost = [cu for cu in req('GET', '/api/customers')[1]['customers'] if cu.get('line_display_name') == '' and cu.get('tag') == 'LINE']
+        check(ghost == [], f'no blank-display-name LINE ghost customer exists (found {len(ghost)})')
+
+        # a message from a userId-less event must not be logged as a junk row either
+        msgs_before = req('GET', '/api/line/messages')[1]
+        n_before = len(msgs_before.get('messages', msgs_before) if isinstance(msgs_before, dict) else msgs_before)
+        st, _ = line_webhook([{'type': 'message', 'source': {'type': 'room', 'roomId': 'R1'}, 'message': {'type': 'text', 'text': 'hi'}}])
+        check(st == 200, f'a userId-less message still returns 200 (got {st})')
+        msgs_after = req('GET', '/api/line/messages')[1]
+        n_after = len(msgs_after.get('messages', msgs_after) if isinstance(msgs_after, dict) else msgs_after)
+        check(n_after == n_before, f'userId-less message logs NO row (before {n_before}, after {n_after})')
 
         print('\n=== PromptPay QR payload (EMVCo structure + CRC + static/dynamic method) ===')
         # The QR is what a customer actually scans to pay. If the CRC-16 or TLV structure is
