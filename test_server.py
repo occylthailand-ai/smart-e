@@ -326,6 +326,10 @@ def main():
         check(st == 400, f'update with a malformed email -> 400 (got {st})')
         st, _ = req('PUT', f'/api/customers/{cvid}', {'tag': 'VIP'})
         check(st == 200, f'a valid partial update (tag only) still works (got {st})')
+        # updating a customer id that doesn't exist must 404 (not silently report success on a
+        # no-op UPDATE) — same missing-record contract as delete/confirm-payment
+        st, b = req('PUT', '/api/customers/999999', {'tag': 'VIP'})
+        check(st == 404 and (b or {}).get('success') is not True, f'update of a non-existent customer -> 404, not success (got {st})')
 
         print('\n=== product input validation (name required; price/stock not negative) ===')
         # _create_order already rejects price<0/qty<1 and _create_customer rejects an empty
@@ -354,6 +358,10 @@ def main():
         check(stock(vpid) == 3, 'stock untouched after the rejected negative-stock update')
         st, _ = req('PUT', f'/api/products/{vpid}', {'price': 0, 'stock': 0})
         check(st == 200, f'price 0 / stock 0 is allowed (free sample / out of stock) (got {st})')
+        # updating a product id that doesn't exist must 404 (was HTTP 200 with an error body,
+        # so a client couldn't tell "updated" from "no such product") — same contract as delete
+        st, b = req('PUT', '/api/products/999999', {'price': 10})
+        check(st == 404, f'update of a non-existent product -> 404 (got {st})')
 
         print('\n=== LINE webhook (signature gate + no junk customers from userId-less events) ===')
         # The webhook is what LINE calls on follow/message. It must (a) reject an unsigned/bad

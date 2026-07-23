@@ -612,6 +612,13 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
                 return
         conn = get_db()
         c = conn.cursor()
+        # เดิม: PUT id ที่ไม่มีจริง → UPDATE ไม่โดนแถวไหน แล้วตอบ {'error':'Not found'} ด้วย HTTP 200
+        # (ไม่ใช่ 404) ต่างจาก _delete_product/_update_order_status ที่ 404 บน id ที่ไม่มี ทำให้ client
+        # แยกไม่ออกว่า "อัปเดตสำเร็จ" หรือ "ไม่มีสินค้านี้" ตรวจก่อนตามแนวเดียวกับ handler อื่น
+        if c.execute("SELECT id FROM products WHERE id=?", (pid,)).fetchone() is None:
+            conn.close()
+            self.send_json({'error': 'ไม่พบสินค้านี้'}, 404)
+            return
         fields = []
         params = []
         for field in ['name','description','price','stock','category','image_url']:
@@ -625,7 +632,7 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         c.execute("SELECT * FROM products WHERE id=?", (pid,))
         row = c.fetchone()
         conn.close()
-        self.send_json(dict(row) if row else {'error': 'Not found'})
+        self.send_json(dict(row) if row else {'error': 'ไม่พบสินค้านี้'}, 200 if row else 404)
 
     def _delete_product(self, pid):
         conn = get_db()
@@ -878,6 +885,13 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({'error': 'อีเมลไม่ถูกต้อง'}, 400)
                 return
         conn = get_db()
+        # เดิม: PUT id ที่ไม่มีจริง → UPDATE ไม่โดนแถวไหน แต่ยังตอบ {'success':True} (200) เสมอ —
+        # แอดมินแก้ลูกค้าที่ไม่มีอยู่/พิมพ์ id ผิด ก็เห็นว่า "สำเร็จ" ทั้งที่ไม่มีอะไรเปลี่ยน ตรวจก่อน
+        # ตอบ 404 ให้ตรงกับ _delete_product/_confirm_payment ที่ 404 บน record ที่ไม่มี
+        if conn.execute("SELECT id FROM customers WHERE id=?", (cid,)).fetchone() is None:
+            conn.close()
+            self.send_json({'error': 'ไม่พบลูกค้านี้'}, 404)
+            return
         fields = []
         params = []
         for f in ['name','email','phone','tag']:
