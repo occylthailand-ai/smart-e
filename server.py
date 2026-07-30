@@ -782,6 +782,23 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         now_cancelled = (new_status == 'cancelled')
         if now_cancelled != was_cancelled:
             items = c.execute("SELECT product_id, qty FROM order_items WHERE order_id=?", (oid,)).fetchall()
+            # "ยกเลิกการยกเลิก" (cancelled -> active) ตัดสต๊อกกลับด้วย MAX(0,stock-qty) เดิม -- แต่
+            # _create_order กันการสั่งเกินสต๊อกไว้ ส่วนนี้ไม่ได้กัน จึงเกิด overselling จากการสลับ
+            # สถานะได้: A สั่ง 5 (สต๊อก 5->0) -> ยกเลิก (0->5) -> B สั่ง 5 (5->0) -> un-cancel A ->
+            # MAX(0,0-5)=0 ออเดอร์ A กลับมา active อ้างของ 5 ชิ้นที่ไม่มีจริง (floor ที่ 0 กลบไว้)
+            # ตรวจสต๊อกให้พอก่อน un-cancel เหมือน _create_order (รวม qty ต่อ product_id เผื่อซ้ำ) --
+            # ถ้าไม่พอ ปฏิเสธ 400 แทนที่จะเสกออเดอร์ที่ทำจริงไม่ได้ให้ฟื้น
+            if not now_cancelled:
+                need = {}
+                for it in items:
+                    if it['product_id'] is not None:
+                        need[it['product_id']] = need.get(it['product_id'], 0) + it['qty']
+                for pid, want in need.items():
+                    prow = c.execute("SELECT name, stock FROM products WHERE id=?", (pid,)).fetchone()
+                    if prow is not None and want > prow['stock']:
+                        conn.close()
+                        self.send_json({'error': f'ยกเลิกการยกเลิกไม่ได้: สต๊อกไม่พอสำหรับ "{prow["name"]}" (มี {prow["stock"]} ต้องการ {want})'}, 400)
+                        return
             for it in items:
                 if it['product_id'] is None:
                     continue

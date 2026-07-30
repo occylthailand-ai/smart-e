@@ -77,6 +77,14 @@ def orders_count(cid):
     return req('GET', f'/api/customers/{cid}')[1]['total_orders']
 
 
+def order_status(target_id):
+    _st, resp = req('GET', '/api/orders')
+    for o in (resp.get('orders', []) if isinstance(resp, dict) else []):
+        if o.get('id') == target_id:
+            return o.get('status')
+    return None
+
+
 def top_product(name):
     # returns {'sold':..,'revenue':..} for the named product from the dashboard, or None
     rows = req('GET', '/api/dashboard/stats')[1]['top_products']
@@ -191,6 +199,27 @@ def main():
         check(st == 400, f'invalid status value -> 400 (got {st})')
         check(stock(pid2) == 1, 'stock untouched after a rejected invalid-status update')
 
+        print('\n=== un-cancel must not oversell (cancelled->active re-deduct is stock-checked, like create) ===')
+        # _create_order rejects overselling, but the cancelled->active re-deduct used MAX(0,stock-qty)
+        # with NO sufficiency check — so flipping status could conjure an order for stock that no
+        # longer exists: A takes all 5 (5->0) -> cancel A (0->5) -> B takes all 5 (5->0) -> un-cancel A
+        # would floor at 0 and revive A claiming 5 phantom units. Un-cancel must now be stock-checked.
+        pidU = req('POST', '/api/products', {'name': 'TU', 'price': 30, 'stock': 5})[1]['id']
+        oidA = req('POST', '/api/orders', {'items': [{'product_id': pidU, 'product_name': 'TU', 'qty': 5, 'price': 30}]})[1]['id']
+        check(stock(pidU) == 0, f'order A qty 5 -> stock 5->0 (got {stock(pidU)})')
+        req('PUT', f'/api/orders/{oidA}/status', {'status': 'cancelled'})
+        check(stock(pidU) == 5, 'cancel A restores stock 0->5')
+        oidB = req('POST', '/api/orders', {'items': [{'product_id': pidU, 'product_name': 'TU', 'qty': 5, 'price': 30}]})[1]['id']
+        check(stock(pidU) == 0, f'order B takes the same 5 -> stock 5->0 (got {stock(pidU)})')
+        st, _ = req('PUT', f'/api/orders/{oidA}/status', {'status': 'confirmed'})
+        check(st == 400, f'un-cancel A when stock is gone -> 400, not a phantom revive (got {st})')
+        check(stock(pidU) == 0, 'rejected un-cancel leaves stock at 0 (no negative, no floor-hidden oversell)')
+        check(order_status(oidA) == 'cancelled', 'order A stays cancelled after the rejected un-cancel')
+        req('PUT', f'/api/orders/{oidB}/status', {'status': 'cancelled'})
+        check(stock(pidU) == 5, 'cancel B frees the stock back to 5')
+        st, _ = req('PUT', f'/api/orders/{oidA}/status', {'status': 'confirmed'})
+        check(st == 200 and stock(pidU) == 0, f'now un-cancel A succeeds -> stock 5->0 (got {st}, stock {stock(pidU)})')
+
         print('\n=== customer spend accounting (cancel must return spend, symmetric with stock) ===')
         # _create_order bumps the customer's total_orders/total_spent; cancelling an order
         # restores stock but historically left total_spent inflated forever, so a customer who
@@ -252,12 +281,6 @@ def main():
         # customer pays. Before this, confirm only flipped the payments row and the order stayed
         # 'pending' forever -- so the order sat in the queue and dashboard pending_orders was
         # inflated even though it was paid. Confirming should carry the linked order pending->paid.
-        def order_status(target_id):
-            _st, resp = req('GET', '/api/orders')
-            for o in (resp.get('orders', []) if isinstance(resp, dict) else []):
-                if o.get('id') == target_id:
-                    return o.get('status')
-            return None
         pidP = req('POST', '/api/products', {'name': 'PayFlow', 'price': 90, 'stock': 5})[1]['id']
         oidP = req('POST', '/api/orders', {'items': [{'product_id': pidP, 'product_name': 'PayFlow', 'qty': 1, 'price': 90}]})[1]['id']
         check(order_status(oidP) == 'pending', 'new order starts pending')
