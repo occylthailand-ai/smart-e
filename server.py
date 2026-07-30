@@ -1029,10 +1029,19 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
             if event_type == 'follow':
                 # Add new customer from LINE
                 c.execute("SELECT id FROM customers WHERE line_user_id=?", (user_id,))
-                if not c.fetchone():
+                existing = c.fetchone()
+                if not existing:
                     c.execute("""INSERT INTO customers (name,line_user_id,line_display_name,tag)
                                  VALUES (?,?,?,?)""",
                               (f"LINE User {user_id[:8]}", user_id, user_id[:8], 'LINE'))
+                    new_cid = c.lastrowid
+                    # A message event can arrive before its follow (a re-messaging user, or a follow
+                    # event we never received): those rows were logged with customer_id=NULL but keep
+                    # the line_user_id. _get_customer's history queries WHERE customer_id=?, so without
+                    # this back-link the user's earlier messages would be invisible in their own thread
+                    # even after they become a customer. Claim the orphaned messages for the new record.
+                    c.execute("UPDATE line_messages SET customer_id=? WHERE line_user_id=? AND customer_id IS NULL",
+                              (new_cid, user_id))
             elif event_type == 'message':
                 msg_text = event.get('message', {}).get('text', '')
                 c.execute("SELECT id FROM customers WHERE line_user_id=?", (user_id,))

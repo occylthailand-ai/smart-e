@@ -425,6 +425,22 @@ def main():
         n_after = len(msgs_after.get('messages', msgs_after) if isinstance(msgs_after, dict) else msgs_after)
         check(n_after == n_before, f'userId-less message logs NO row (before {n_before}, after {n_after})')
 
+        # A message can arrive BEFORE its follow (a re-messaging user, or a follow event we never
+        # received): it's logged with customer_id=NULL but keeps the line_user_id. When the user then
+        # follows and becomes a customer, those earlier messages must be back-linked, or the CRM
+        # thread (GET /api/customers/<id> → messages WHERE customer_id=?) would be missing them.
+        line_webhook([{'type': 'message', 'source': {'type': 'user', 'userId': 'U_msg_first'}, 'message': {'type': 'text', 'text': 'สนใจสินค้าค่ะ'}}])
+        check(customer_by_line_id('U_msg_first') is None, 'a message before any follow creates NO customer yet')
+        line_webhook([{'type': 'follow', 'source': {'type': 'user', 'userId': 'U_msg_first'}}])
+        cust = customer_by_line_id('U_msg_first')
+        check(cust is not None, 'the later follow creates the customer')
+        detail = req('GET', f"/api/customers/{cust['id']}")[1]
+        texts = [m.get('message') for m in detail.get('messages', [])]
+        check('สนใจสินค้าค่ะ' in texts, f'the pre-follow message is back-linked into the customer thread (got {texts})')
+        # a second follow from the same user must not duplicate-claim or crash
+        st, _ = line_webhook([{'type': 'follow', 'source': {'type': 'user', 'userId': 'U_msg_first'}}])
+        check(st == 200, 're-follow is a no-op 200 (customer already exists)')
+
         print('\n=== PromptPay QR payload (EMVCo structure + CRC + static/dynamic method) ===')
         # The QR is what a customer actually scans to pay. If the CRC-16 or TLV structure is
         # wrong, every banking app rejects it. And the Point of Initiation Method (tag 01) must
