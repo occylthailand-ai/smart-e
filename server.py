@@ -710,6 +710,12 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
             except (TypeError, ValueError):
                 self.send_json({'error': 'price และ qty ของสินค้าแต่ละรายการต้องเป็นตัวเลข'}, 400)
                 return
+            # float("nan"/"inf") ไม่โยน ValueError และลอดผ่าน `price < 0` ด้านล่าง (int() กัน qty
+            # ไว้แล้ว) -- ถ้าปล่อยไป total = sum(price*qty) กลายเป็น NaN/inf แล้วถูกเขียนลง
+            # orders.total และบวกสะสมเข้า customers.total_spent ทำให้มูลค่าลูกค้า/รายได้เพี้ยนถาวร
+            if not math.isfinite(item['price']):
+                self.send_json({'error': 'price ต้องเป็นตัวเลขจำกัด (ไม่รับ NaN/Infinity)'}, 400)
+                return
             if item['price'] < 0 or item['qty'] < 1:
                 self.send_json({'error': 'price ต้องไม่ติดลบ และ qty ต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป'}, 400)
                 return
@@ -952,6 +958,13 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
             amount = float(body.get('amount', 0))
         except (TypeError, ValueError):
             self.send_json({'error': 'amount ต้องเป็นตัวเลข'}, 400)
+            return
+        # float() รับ "nan"/"inf"/"-inf" โดยไม่โยน ValueError และ NaN/Infinity ลอดผ่าน `amount < 0`
+        # ด้านล่างได้ (nan<0 และ inf<0 เป็น False ทั้งคู่) -- ถ้าปล่อยไป แถว payments จะบันทึกยอด
+        # NaN/inf แล้ว SUM(amount) ของรายได้ทั้งร้านกลายเป็น NaN/inf ถาวร (เพี้ยนหนักกว่ายอดติดลบ
+        # ที่โค้ดนี้กันไว้แล้วด้วยเหตุผลเดียวกัน) -- รับเฉพาะตัวเลขจำกัดเท่านั้น
+        if not math.isfinite(amount):
+            self.send_json({'error': 'amount ต้องเป็นตัวเลขจำกัด (ไม่รับ NaN/Infinity)'}, 400)
             return
         # amount=0 (หรือเว้นว่าง) = QR แบบให้ผู้จ่ายกรอกยอดเอง (generate_promptpay_payload
         # จะไม่ใส่ tag จำนวนเงิน) -- อนุญาต แต่ค่าติดลบไม่มีความหมาย: QR จะกลายเป็นแบบไม่ระบุยอด

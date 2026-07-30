@@ -162,6 +162,15 @@ def main():
         check(st == 400, f'qty < 1 -> 400 (got {st})')
         st, _ = req('POST', '/api/orders', {'items': [{'product_id': pid, 'qty': 1, 'price': -5}]})
         check(st == 400, f'negative price -> 400 (got {st})')
+        # float("nan"/"inf") does NOT raise and slips past `price < 0` (nan<0 and inf<0 are both
+        # False), so an order total of NaN/inf would be written to orders.total and summed into
+        # customers.total_spent, permanently poisoning revenue/customer-value stats. Must be 400.
+        st, _ = req('POST', '/api/orders', {'items': [{'product_id': pid, 'qty': 1, 'price': 'nan'}]})
+        check(st == 400, f'NaN price -> 400 (got {st})')
+        check(stock(pid) == 5, 'stock unchanged after rejected NaN-price order')
+        st, _ = req('POST', '/api/orders', {'items': [{'product_id': pid, 'qty': 1, 'price': 'inf'}]})
+        check(st == 400, f'Infinity price -> 400 (got {st})')
+        check(stock(pid) == 5, 'stock unchanged after rejected inf-price order')
 
         print('\n=== phantom-stock guard (oversell + cancel must not conjure stock) ===')
         st, _ = req('POST', '/api/orders', {'items': [{'product_id': pid, 'product_name': 'T', 'qty': 10, 'price': 100}]})
@@ -480,6 +489,16 @@ def main():
         check('54' not in d0, 'no tag54 amount on a fill-in-amount QR')
         p0 = qr0['payload']
         check(p0[-4:] == crc16_ccitt(p0[:-4]), f'CRC-16 valid on no-amount QR (appended {p0[-4:]})')
+
+        # A QR amount of NaN/Infinity slips past `amount < 0` (nan<0 and inf<0 are both False),
+        # so a payments row of NaN/inf would be inserted and SUM(amount) across the whole shop's
+        # revenue becomes NaN/inf forever. Must be rejected with 400, same as a negative amount.
+        st, _ = req('POST', '/api/payments/qr', {'phone': '0812345678', 'amount': 'nan'})
+        check(st == 400, f'QR with a NaN amount -> 400 (got {st})')
+        st, _ = req('POST', '/api/payments/qr', {'phone': '0812345678', 'amount': 'inf'})
+        check(st == 400, f'QR with an Infinity amount -> 400 (got {st})')
+        st, _ = req('POST', '/api/payments/qr', {'phone': '0812345678', 'amount': -1})
+        check(st == 400, f'QR with a negative amount -> 400 (got {st})')
 
         print('\n=== PromptPay target resolution (right sub-tag + no double-66 mangling) ===')
         # The merchant id inside tag 29 is where the money actually goes. It must resolve to
