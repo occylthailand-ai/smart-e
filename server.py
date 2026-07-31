@@ -45,6 +45,18 @@ LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET', '')
 # call at a closed/local port and deterministically exercise the send-failure path
 # (default is the real endpoint; production is unchanged).
 LINE_API_BASE = os.environ.get('LINE_API_BASE', 'https://api.line.me')
+# Upper bound on a request body we will read into memory. read_body() runs at the
+# top of every POST/PUT dispatch — BEFORE the admin key or LINE-signature check — so
+# without a cap an UNauthenticated client could send a huge Content-Length and make
+# the server allocate/read that many bytes (memory-exhaustion DoS). Every real body
+# here is a small JSON object (an order, a settings blob, a LINE webhook event batch),
+# so 1 MB is generous. Overridable for tests. Anything larger is rejected with 413
+# without reading the socket.
+MAX_BODY_BYTES = int(os.environ.get('MAX_BODY_BYTES', str(1024 * 1024)))
+
+# Sentinel returned by read_body() when Content-Length exceeds MAX_BODY_BYTES, so the
+# dispatcher can answer 413 (distinct from None = malformed/non-object JSON = 400).
+BODY_TOO_LARGE = object()
 
 # ─────────────────────────────────────────────
 # DATABASE SETUP
@@ -252,7 +264,25 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def read_body(self):
-        length = int(self.headers.get('Content-Length', 0))
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+        except (TypeError, ValueError):
+            length = 0
+        # Never read an oversized (or negative/garbage) declared length in one allocation —
+        # that's the memory-exhaustion vector, and read_body() runs before auth. When the
+        # declared length exceeds the cap, drain up to the cap in bounded chunks (constant
+        # memory) so a client whose body is only modestly over the limit can finish sending
+        # and read a clean 413, then signal too-large. A gigabyte flood still can't allocate
+        # more than one chunk here, and the dispatcher closes the connection afterward.
+        if length < 0 or length > MAX_BODY_BYTES:
+            remaining = min(max(length, 0), MAX_BODY_BYTES)
+            while remaining > 0:
+                chunk = self.rfile.read(min(65536, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+            self._raw_body = b''
+            return BODY_TOO_LARGE
         if length:
             self._raw_body = self.rfile.read(length)
             try:
@@ -364,6 +394,13 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
     def _dispatch_post(self):
         path = urllib.parse.urlparse(self.path).path
         body = self.read_body()
+        if body is BODY_TOO_LARGE:
+            # We rejected without draining the (oversized) body, so the socket may still hold
+            # those bytes — close the connection rather than risk misreading them as the next
+            # request on a keep-alive connection.
+            self.close_connection = True
+            self.send_json({'error': 'Request body too large'}, 413)
+            return
         if body is None:
             self.send_json({'error': 'Invalid JSON body'}, 400)
             return
@@ -399,6 +436,10 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
     def _dispatch_put(self):
         path = urllib.parse.urlparse(self.path).path
         body = self.read_body()
+        if body is BODY_TOO_LARGE:
+            self.close_connection = True
+            self.send_json({'error': 'Request body too large'}, 413)
+            return
         if body is None:
             self.send_json({'error': 'Invalid JSON body'}, 400)
             return

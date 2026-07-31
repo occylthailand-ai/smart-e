@@ -545,6 +545,20 @@ def main():
         st, ok = req('POST', '/api/customers', {'name': 'ลูกค้า สมชาย'})
         check(st == 201 and ok.get('id'), f'a valid object body still creates normally (got {st})')
 
+        print('\n=== oversized request body is rejected with 413 BEFORE auth (memory-DoS guard) ===')
+        # read_body() reads Content-Length bytes at the top of every POST/PUT — BEFORE the admin
+        # key / LINE-signature check. Without a cap an UNauthenticated client could send a huge
+        # Content-Length and force the server to allocate/read that many bytes. Assert a body over
+        # the 1 MB cap is 413'd, that it happens with NO admin key (i.e. the guard is pre-auth), and
+        # that normal-size bodies are unaffected.
+        big = {'name': 'x' * (1024 * 1024 + 50)}  # JSON body > 1 MB (the default MAX_BODY_BYTES)
+        st, _ = req('POST', '/api/customers', big, key=None)
+        check(st == 413, f'oversized POST body -> 413 without admin key (got {st})')
+        st, _ = req('PUT', '/api/products/1', big, key=None)
+        check(st == 413, f'oversized PUT body -> 413 without admin key (got {st})')
+        st, ok = req('POST', '/api/customers', {'name': 'ลูกค้า ขนาดปกติ'})
+        check(st == 201 and ok.get('id'), f'a normal-size body is unaffected (got {st})')
+
         print(f'\n=== RESULT: {passed} passed, {failed} failed ===')
         return 1 if failed else 0
     finally:
