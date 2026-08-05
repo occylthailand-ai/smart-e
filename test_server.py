@@ -500,6 +500,20 @@ def main():
         st, _ = req('POST', '/api/payments/qr', {'phone': '0812345678', 'amount': -1})
         check(st == 400, f'QR with a negative amount -> 400 (got {st})')
 
+        # A QR/payment may reference an order_id, but _create_qr stored it without checking the order
+        # exists — so a payment row could point at a "ghost" order (typo'd/nonexistent id). That row
+        # can never move an order's status (_confirm_payment's UPDATE ... WHERE id=<ghost> no-ops) and
+        # pollutes any payments↔orders join. A nonexistent order_id must be rejected 404; a real one
+        # (and no order_id at all) must still succeed.
+        st, _ = req('POST', '/api/payments/qr', {'phone': '0812345678', 'amount': 90, 'order_id': 999999})
+        check(st == 404, f'QR with a nonexistent order_id -> 404 (not a payment against a ghost order) (got {st})')
+        st, realord = req('POST', '/api/orders', {'customer_name': 'คุณคิวอาร์', 'items': [{'product_id': None, 'product_name': 'ค่าบริการ', 'qty': 1, 'price': 90}]})
+        check(st == 201, f'order created for QR-link test -> 201 (got {st})')
+        st, _ = req('POST', '/api/payments/qr', {'phone': '0812345678', 'amount': 90, 'order_id': realord['id']})
+        check(st == 200, f'QR with a real order_id -> 200 (got {st})')
+        st, _ = req('POST', '/api/payments/qr', {'phone': '0812345678', 'amount': 90})
+        check(st == 200, f'QR with no order_id still allowed (standalone) -> 200 (got {st})')
+
         print('\n=== PromptPay target resolution (right sub-tag + no double-66 mangling) ===')
         # The merchant id inside tag 29 is where the money actually goes. It must resolve to
         # the correct EMVCo sub-tag and value: a mobile in ANY form -> ("01", 0066+9 digits);

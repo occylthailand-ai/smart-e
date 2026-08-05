@@ -1019,6 +1019,18 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
 
         conn = get_db()
         c = conn.cursor()
+        # เดิม order_id ที่ส่งมาถูกเก็บลง payments ตรงๆ โดยไม่ตรวจว่ามีออเดอร์นั้นจริง -- แถวชำระเงิน/QR
+        # จึงผูกกับ "ออเดอร์ผี" (id ที่ไม่มีอยู่/พิมพ์ผิด) ได้ ผลคือ _confirm_payment ยืนยันแล้วแต่
+        # UPDATE orders ไม่โดนแถวไหน (order_updated=False ตลอด) และรายงานใดๆ ที่ join payments↔orders
+        # จะหลุด/เพี้ยน โดยที่แถวชำระเงินนั้นไม่มีทางกระทบสถานะออเดอร์ได้เลย ตรวจว่ามีออเดอร์จริงก่อน
+        # (เหมือน _confirm_payment ที่ 404 บนใบชำระที่ไม่มี และ _create_order ที่ 400 บนสินค้าที่ไม่มี)
+        # order_id เป็น None = QR อิสระที่ไม่ผูกออเดอร์ -- ยังอนุญาตตามเดิม
+        if order_id is not None:
+            orow = c.execute("SELECT id FROM orders WHERE id=?", (order_id,)).fetchone()
+            if orow is None:
+                conn.close()
+                self.send_json({'error': f'ไม่พบออเดอร์ id={order_id}'}, 404)
+                return
         c.execute("""INSERT INTO payments (order_id,method,amount,status,qr_payload,ref_code)
                      VALUES (?,?,?,?,?,?)""",
                   (order_id, 'promptpay', amount, 'pending', payload, ref_code))
