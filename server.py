@@ -611,6 +611,13 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
         except (TypeError, ValueError):
             self.send_json({'error': 'price ต้องเป็นตัวเลข และ stock ต้องเป็นจำนวนเต็ม'}, 400)
             return
+        # float("nan"/"inf") ไม่โยน ValueError และ nan/+inf ลอดผ่าน `price < 0` ด้านล่าง (เหมือนที่
+        # _create_order/_create_qr ดักไว้แล้ว) -- +Infinity ถูกเก็บลง products.price จริงแล้ว GET
+        # /api/products ตอบ JSON ที่มี literal `Infinity` = JSON ผิดสเปก parse ทั้งแคตตาล็อกพังทุก
+        # client ส่วน NaN โยน 500 ตอน insert -- ทั้งคู่ต้องเป็น 400 ที่สะอาดเหมือน path เงินอื่น
+        if not math.isfinite(price):
+            self.send_json({'error': 'price ต้องเป็นตัวเลขจำกัด (ไม่รับ NaN/Infinity)'}, 400)
+            return
         if price < 0 or stock < 0:
             self.send_json({'error': 'price และ stock ต้องไม่ติดลบ'}, 400)
             return
@@ -647,6 +654,11 @@ class SmartEHandler(http.server.BaseHTTPRequestHandler):
                     body['stock'] = int(body['stock'])
             except (TypeError, ValueError):
                 self.send_json({'error': 'price ต้องเป็นตัวเลข และ stock ต้องเป็นจำนวนเต็ม'}, 400)
+                return
+            # กัน NaN/Infinity เหมือน _create_product -- PUT price:Infinity ก็เขียนลง products.price
+            # ได้เช่นกัน แล้วทำให้ GET /api/products ตอบ JSON ผิดสเปก (แคตตาล็อกพังทุก client)
+            if 'price' in body and not math.isfinite(body['price']):
+                self.send_json({'error': 'price ต้องเป็นตัวเลขจำกัด (ไม่รับ NaN/Infinity)'}, 400)
                 return
             if ('price' in body and body['price'] < 0) or ('stock' in body and body['stock'] < 0):
                 self.send_json({'error': 'price และ stock ต้องไม่ติดลบ'}, 400)

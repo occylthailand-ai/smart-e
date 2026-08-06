@@ -6,7 +6,7 @@ repeatable so they can't silently regress). Pure stdlib, no test framework.
 
 Run:  python3 test_server.py      (exit 0 = pass, 1 = fail)
 """
-import base64, hashlib, hmac, json, os, subprocess, sys, tempfile, time, urllib.error, urllib.request
+import base64, hashlib, hmac, json, math, os, subprocess, sys, tempfile, time, urllib.error, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORT = int(os.environ.get('TEST_PORT', '8987'))
@@ -171,6 +171,32 @@ def main():
         st, _ = req('POST', '/api/orders', {'items': [{'product_id': pid, 'qty': 1, 'price': 'inf'}]})
         check(st == 400, f'Infinity price -> 400 (got {st})')
         check(stock(pid) == 5, 'stock unchanged after rejected inf-price order')
+
+        print('\n=== product input validation (NaN/Infinity price must not persist) ===')
+        # The order/QR paths reject NaN/Infinity, but the product create/update path did NOT: a
+        # product with price=+Infinity was persisted, then GET /api/products emitted a literal
+        # `Infinity` — invalid JSON — so JSON.parse of the WHOLE catalog throws and every client's
+        # product list breaks (NaN instead 500'd on insert). Both must be a clean 400 like the
+        # sibling money paths, and no such product may reach the catalog.
+        st, _ = req('POST', '/api/products', {'name': 'bad', 'price': 'inf', 'stock': 1})
+        check(st == 400, f'POST product Infinity price -> 400 (got {st})')
+        st, _ = req('POST', '/api/products', {'name': 'bad', 'price': 'nan', 'stock': 1})
+        check(st == 400, f'POST product NaN price -> 400 (got {st})')
+        st, _ = req('POST', '/api/products', {'name': 'bad', 'price': '-inf', 'stock': 1})
+        check(st == 400, f'POST product -Infinity price -> 400 (got {st})')
+        gp = req('POST', '/api/products', {'name': 'ok-finite', 'price': 12.5, 'stock': 2})
+        check(gp[0] == 201, f'valid finite price still creates (got {gp[0]})')
+        okid = gp[1]['id']
+        st, _ = req('PUT', f'/api/products/{okid}', {'price': 'inf'})
+        check(st == 400, f'PUT product Infinity price -> 400 (got {st})')
+        check(req('GET', f'/api/products/{okid}')[1]['price'] == 12.5, 'price unchanged after rejected inf PUT')
+        # No non-finite price may reach the catalog. (Python's json.loads is lenient and would parse a
+        # leaked `Infinity`, so assert finiteness on the parsed prices — that IS what breaks strict
+        # clients like a browser's JSON.parse and is the regression this guards.)
+        cat = req('GET', '/api/products')
+        prices = [p['price'] for p in cat[1]['products']]
+        check(cat[0] == 200 and all(math.isfinite(x) for x in prices),
+              f'every catalog price is finite (got {prices})')
 
         print('\n=== phantom-stock guard (oversell + cancel must not conjure stock) ===')
         st, _ = req('POST', '/api/orders', {'items': [{'product_id': pid, 'product_name': 'T', 'qty': 10, 'price': 100}]})
