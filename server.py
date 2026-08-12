@@ -181,10 +181,16 @@ def _resolve_promptpay_target(raw: str):
         return '03', digits
     if len(digits) == 13:
         return '02', digits
-    # Mobile number in any other form -> strip the local "0" or intl "66" prefix, then re-add 0066.
+    # Mobile number in any other form -> reduce to the 9 significant digits, then re-add 0066.
+    # A Thai mobile is 9 significant digits; people write it many ways, and very commonly with
+    # BOTH the country code AND the habitual leading 0 ("+66 081-234-5678" / "660812345678").
+    # Stripping only ONE of the two (the old `elif`) left a stray leading 0 -> "0066" + 10 digits
+    # = a 14-char value, which is an INVALID PromptPay mobile ID (must be 0066 + 9 = 13): the QR
+    # then points at no real account and the merchant never gets paid. Strip the intl "66" prefix
+    # AND a subsequent leading "0" independently so every common form collapses to 9 digits.
     if digits.startswith('66'):
         digits = digits[2:]
-    elif digits.startswith('0'):
+    if digits.startswith('0'):
         digits = digits[1:]
     return '01', '0066' + digits
 

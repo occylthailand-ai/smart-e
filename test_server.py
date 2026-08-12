@@ -558,6 +558,12 @@ def main():
             ('66812345678',     '01', '0066812345678', 'intl mobile 66-prefixed (no double 66)'),
             ('+66 81-234-5678', '01', '0066812345678', 'intl mobile with punctuation'),
             ('0066812345678',   '01', '0066812345678', 'already-canonical mobile unchanged'),
+            # Country code AND the habitual leading 0 together — a very common way people write
+            # their number. Stripping only one prefix left "0066"+10 digits = a 14-char INVALID
+            # mobile ID, so the QR pointed at no real account and the merchant never got paid.
+            ('660812345678',    '01', '0066812345678', 'intl 66 + leading 0 (both stripped)'),
+            ('+66 081-234-5678','01', '0066812345678', 'intl +66 + leading 0 with punctuation'),
+            ('0866123456',      '01', '0066866123456', 'local mobile that genuinely starts 066 kept'),
             ('1234567890123',   '02', '1234567890123', '13-digit national/tax ID -> sub-tag 02'),
             ('123456789012345', '03', '123456789012345', '15-digit e-wallet -> sub-tag 03'),
         ]
