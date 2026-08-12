@@ -1,0 +1,22 @@
+name: 🧪 CI — smart-e server tests
+
+# รันทุก push และทุก PR — จับ regression ของ auth / order validation / stock ก่อนขึ้น production
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  server-tests:
+    name: ⚙️ server.py regression guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Syntax check (compile)
+        run: python -m py_compile server.py test_server.py
+      - name: Regression guard (boots server on a throwaway db + alt port)
+        run: python test_server.py
